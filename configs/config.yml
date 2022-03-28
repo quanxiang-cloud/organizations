@@ -1,0 +1,69 @@
+port: :80
+model: debug
+maxLoginErrNum: 6
+lockAccountTime: 24
+templateName: "人员导入模版.xlsx"
+poc: false
+#  -------------------- log --------------------
+log:
+  level: -1
+  development: false
+  sampling:
+    initial: 100
+    thereafter: 100
+  outputPath:
+    - stderr
+  errorOutputPath:
+    - stderr
+
+# -------------------- mysql --------------------
+mysql:
+  host: msqyl:3306
+  db: organizations
+  user: xxx
+  password: xxxxxx
+  log: true
+
+
+#  -------------------- internalNet --------------------
+internalNet:
+  timeout: 20
+  maxIdleConns: 10
+
+#-------------------redis配置-----------------
+redis:
+  isCluster: false
+  addrs:
+    - "redis1:6379"
+    - "redis2:6379"
+    - "redis3:6379"
+  username:
+  password:
+
+# ----------------------redis verificationCode----------------------
+verificationCode:
+  loginCode: "code:login"
+  resetCode: "code:reset"
+  forgetCode: "code:forget"
+  registerCode: "code:register"
+  expireTime: 300
+
+#--------------------message template-------------------
+messageTemplate:
+  loginCode: org_logincode
+  resetCode: org_resetcode
+  forgetCode: org_forgetcode
+  registerCode: org_registercode
+  resetPWD: org_resetpwd
+# -------------------- elastic --------------------
+elastic:
+  host:
+    - http://es1:9200
+    - http://es2:9200
+  log: true
+
+
+#------------ ldap------------
+ldap:
+  open: false
+  regex: yunify.com

@@ -1,0 +1,45 @@
+port: :80
+model: debug
+templateName: "人员导入模版.xlsx"
+orgHost: "http://org"
+poc: false
+#  -------------------- log --------------------
+log:
+  level: -1
+  development: false
+  sampling:
+    initial: 100
+    thereafter: 100
+  outputPath:
+    - stderr
+  errorOutputPath:
+    - stderr
+
+# -------------------- mysql --------------------
+mysql:
+  host: msyql:3306
+  db: organizations
+  user: xxx
+  password: xxxxxxx
+  log: true
+
+
+#  -------------------- internalNet --------------------
+internalNet:
+  timeout: 20
+  maxIdleConns: 10
+
+api:
+  in:
+    - /api/v1/orgs/m/user/add
+    - /api/v1/orgs/m/user/update
+    - /api/v1/orgs/dep/admin/update
+    - /api/v1/orgs/user/admin/importFile
+  out:
+    - /api/v1/orgs/m/user/template
+    - /api/v1/orgs/m/user/info
+    - /api/v1/orgs/h/user/info
+    - /api/v1/orgs/h/user/id
+  column:
+    - /api/v1/orgs/m/column/
+
