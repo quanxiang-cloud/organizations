@@ -803,14 +803,17 @@ func GetUserLeader(c context.Context, userRepo org.UserRepo, userLeaderRepo org.
 		for k1 := range ud[users[k].ID] {
 			leaders := make([]user.Leader, 0)
 			leader := user.Leader{}
-			leader.ID = leaderMap[ud[users[k].ID][k1]].ID
-			leader.Name = leaderMap[ud[users[k].ID][k1]].Name
-			leader.Email = leaderMap[ud[users[k].ID][k1]].Email
-			leader.Phone = leaderMap[ud[users[k].ID][k1]].Phone
-			leader.UseStatus = leaderMap[ud[users[k].ID][k1]].UseStatus
-			leader.Position = leaderMap[ud[users[k].ID][k1]].Position
-			leaders = append(leaders, leader)
-			resp.Leader = append(resp.Leader, leaders)
+			if v, ok := leaderMap[ud[users[k].ID][k1]]; ok && v != nil {
+				leader.ID = leaderMap[ud[users[k].ID][k1]].ID
+				leader.Name = leaderMap[ud[users[k].ID][k1]].Name
+				leader.Email = leaderMap[ud[users[k].ID][k1]].Email
+				leader.Phone = leaderMap[ud[users[k].ID][k1]].Phone
+				leader.UseStatus = leaderMap[ud[users[k].ID][k1]].UseStatus
+				leader.Position = leaderMap[ud[users[k].ID][k1]].Position
+				leaders = append(leaders, leader)
+				resp.Leader = append(resp.Leader, leaders)
+			}
+
 		}
 		responses = append(responses, resp)
 	}
