@@ -5,15 +5,15 @@ env:
   DATE: $(date "+%Y%m%d")
 on: [push, pull_request]
 jobs:
-  test:
-    runs-on: self-hosted
-    steps:
-      - run: go test ./...
-      - run: go test -cover ./...
+#  test:
+#    runs-on: self-hosted
+#    steps:
+#      - run: go test ./...
+#      - run: go test -cover ./...
 
   deploy_alpha:
     runs-on: self-hosted
-    needs: test
+#    needs: test
     if: github.ref == 'refs/heads/alpha'
     steps:
       - run: GOOS=linux GOOSARCH=amd64 go build -o ${{ env.PROJECT_NAME }} ./cmd/.
@@ -21,7 +21,7 @@ jobs:
 
   build_test:
     runs-on: self-hosted
-    needs: test
+#    needs: test
     if: startsWith(github.ref, 'refs/heads/release')
     steps:
       - run: go mod tidy
@@ -33,7 +33,7 @@ jobs:
 
   build_staging:
     runs-on: self-hosted
-    needs: test
+#    needs: test
     if: ${{ github.ref_type == 'tag' }}
     steps:
       - run: echo ${{ github.ref_type }}
@@ -48,7 +48,7 @@ jobs:
 
   deploy_test:
     runs-on: self-hosted
-    needs: [test,build_test]
+    needs: [build_test]
     if: startsWith(github.ref, 'refs/heads/release')
     steps:
       - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
@@ -56,7 +56,7 @@ jobs:
 
   deploy_staging:
     runs-on: self-hosted
-    needs: [test,build_staging]
+    needs: [build_staging]
     if: ${{ github.ref_type == 'tag' }}
     steps:
       - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
