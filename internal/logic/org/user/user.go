@@ -559,7 +559,15 @@ func (u *user) getUsersPageList(c context.Context, r *SearchListUserRequest) ([]
 			}
 		}
 	}
-	list, total := u.userRepo.PageList(c, u.DB, consts.NormalStatus, r.Page, r.Limit, depIDs)
+	var userIDs = make([]string, 0)
+	if len(depIDs) > 0 {
+		relations := u.userDepRepo.SelectByDEPID(u.DB, depIDs...)
+		for k := range relations {
+			userIDs = append(userIDs, relations[k].UserID)
+		}
+	}
+
+	list, total := u.userRepo.PageList(c, u.DB, consts.NormalStatus, r.Page, r.Limit, userIDs)
 
 	return list, total
 }

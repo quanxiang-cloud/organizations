@@ -55,9 +55,9 @@ func (u *userRepo) UpdateByID(ctx context.Context, tx *gorm.DB, r *org.User) (er
 	return err
 }
 
-func (u *userRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int, depIDs []string) (list []*org.User, total int64) {
-	if len(depIDs) > 0 {
-		db = db.Where("id in (select user_id from org_user_department_relation where dep_id in (?))", depIDs)
+func (u *userRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int, userIDs []string) (list []*org.User, total int64) {
+	if len(userIDs) > 0 {
+		db = db.Where("id in (?)", userIDs)
 	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)

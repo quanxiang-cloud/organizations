@@ -58,7 +58,7 @@ type UserRepo interface {
 	UpdateByID(ctx context.Context, tx *gorm.DB, r *User) (err error)
 	Get(ctx context.Context, db *gorm.DB, id string) (res *User)
 	List(ctx context.Context, db *gorm.DB, id ...string) (list []*User)
-	PageList(ctx context.Context, db *gorm.DB, status, page, limit int, depIDs []string) (list []*User, total int64)
+	PageList(ctx context.Context, db *gorm.DB, status, page, limit int, userIDs []string) (list []*User, total int64)
 	SelectByEmailOrPhone(ctx context.Context, db *gorm.DB, info string) (res *User)
 	GetColumns(ctx context.Context, db *gorm.DB, user *User, schema string) []Columns
 	Count(ctx context.Context, db *gorm.DB, status, activeStatus int) (totalUser, activeUserNum int64)
