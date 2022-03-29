@@ -14,6 +14,7 @@ limitations under the License.
 */
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
@@ -180,8 +181,10 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 			}
 		}
 		//寻找leader，从当前到顶层
-		leaderToTop := s.getLeaderToTop(user.Ctx, v.ID)
-		eu.Leaders = append(eu.Leaders, leaderToTop...)
+		leaderToTop, err := s.getLeaderToTop(user.Ctx, v.ID, v.ID)
+		if err == nil && leaderToTop != nil {
+			eu.Leaders = append(eu.Leaders, leaderToTop...)
+		}
 		esData.User = append(esData.User, *eu)
 
 	}
@@ -208,11 +211,14 @@ func (s *Search) getDepToTop(depPID string, deps []v1alpha1.Department, depMap m
 	return deps
 }
 
-func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1.Leader {
+func (s *Search) getLeaderToTop(ctx context.Context, userID, startUserID string) ([][]v1alpha1.Leader, error) {
 	relations := s.userLeaderRepo.SelectByUserIDs(s.db, userID)
 	if len(relations) > 0 {
 		res := make([][]v1alpha1.Leader, 0)
 		for k := range relations {
+			if relations[k].LeaderID == startUserID {
+				return nil, errors.New("circle leader")
+			}
 			if relations[k].LeaderID != "" {
 				ls := make([]v1alpha1.Leader, 0)
 				get := s.userRepo.Get(ctx, s.db, relations[k].LeaderID)
@@ -222,7 +228,10 @@ func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1
 					leader.Name = get.Name
 					leader.Attr = relations[k].Attr
 					ls = append(ls, leader)
-					array := s.getLeaderToTop(ctx, get.ID)
+					array, err := s.getLeaderToTop(ctx, get.ID, startUserID)
+					if err != nil {
+						return nil, err
+					}
 					if array != nil {
 						for k1 := range array {
 							ll := append(ls, array[k1]...)
@@ -235,9 +244,9 @@ func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1
 			}
 
 		}
-		return res
+		return res, nil
 
 	}
-	return nil
+	return nil, nil
 
 }

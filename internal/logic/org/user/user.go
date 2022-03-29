@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -407,19 +408,24 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		}
 	}
 	if len(r.Leader) > 0 {
+
 		err = u.userLeaderRepo.DeleteByUserIDs(tx, r.ID)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
 		for _, v := range r.Leader {
+			err = checkLeader(c, u, v.UserID, r.ID)
+			if err != nil {
+				return nil, error2.New(code.ErrCircleData)
+			}
 			relation := org.UserLeaderRelation{
 				ID:       id2.ShortID(0),
 				UserID:   r.ID,
 				LeaderID: v.UserID,
 				Attr:     v.Attr,
 			}
-			err := u.userLeaderRepo.Add(tx, &relation)
+			err = u.userLeaderRepo.Add(tx, &relation)
 			if err != nil {
 				tx.Rollback()
 				return nil, err
@@ -651,8 +657,11 @@ func (u *user) AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*Sea
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		resUser.Leader = append(resUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			resUser.Leader = append(resUser.Leader, leader...)
+		}
+
 		return &resUser, nil
 	}
 	return nil, nil
@@ -729,8 +738,10 @@ func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) 
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		resUser.Leader = append(resUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			resUser.Leader = append(resUser.Leader, leader...)
+		}
 		return &resUser, nil
 	}
 	return nil, error2.New(code.DataNotExist)
@@ -1072,8 +1083,11 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		userUser.Leader = append(userUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			userUser.Leader = append(userUser.Leader, leader...)
+		}
+
 		marshal, err := json.Marshal(userUser)
 		if err != nil {
 			return nil, err
@@ -1084,30 +1098,59 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 	return nil, error2.New(code.DataNotExist)
 }
 
-func makeLeaderToTop(c context.Context, u *user, userID string) [][]Leader {
+func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([][]Leader, error) {
 	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
 	if len(relations) > 0 {
 		res := make([][]Leader, 0)
 		for k := range relations {
-			ls := make([]Leader, 0)
-			get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
-			leader := Leader{}
-			leader.ID = get.ID
-			leader.Name = get.Name
-			leader.Email = get.Email
-			ls = append(ls, leader)
-			array := makeLeaderToTop(c, u, get.ID)
-			if array != nil {
-				for k1 := range array {
-					ll := append(ls, array[k1]...)
-					res = append(res, ll)
-				}
-				continue
+			if relations[k].LeaderID == startUserID {
+				return nil, errors.New("circle leader")
 			}
-			res = append(res, ls)
+			if relations[k].LeaderID != "" {
+				ls := make([]Leader, 0)
+				get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
+				leader := Leader{}
+				leader.ID = get.ID
+				leader.Name = get.Name
+				leader.Email = get.Email
+				ls = append(ls, leader)
+				array, err := makeLeaderToTop(c, u, get.ID, startUserID)
+				if err != nil {
+					return nil, err
+				}
+				if array != nil {
+					for k1 := range array {
+						ll := append(ls, array[k1]...)
+						res = append(res, ll)
+					}
+					continue
+				}
+				res = append(res, ls)
+			}
 
 		}
-		return res
+		return res, nil
+	}
+	return nil, nil
+
+}
+
+func checkLeader(c context.Context, u *user, userID, startUserID string) error {
+	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
+	if len(relations) > 0 {
+		for k := range relations {
+			if relations[k].LeaderID == startUserID {
+				return errors.New("circle leader")
+			}
+			if relations[k].LeaderID != "" {
+				err := checkLeader(c, u, relations[k].LeaderID, startUserID)
+				if err != nil {
+					return err
+				}
+			}
+
+		}
+		return nil
 	}
 	return nil
 
