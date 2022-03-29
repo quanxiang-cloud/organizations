@@ -14,9 +14,7 @@ limitations under the License.
 */
 import (
 	"context"
-	"gorm.io/gorm"
-	"time"
-
+	"fmt"
 	id2 "github.com/quanxiang-cloud/cabin/id"
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
@@ -26,6 +24,7 @@ import (
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	"github.com/quanxiang-cloud/organizations/pkg/header2"
 	"github.com/quanxiang-cloud/organizations/pkg/job/refactor/oldmodels"
+	"gorm.io/gorm"
 )
 
 // CleanDataV1 clean data from old version
@@ -82,23 +81,37 @@ func (o *Data) CleanV1() error {
 	var err error = nil
 	tx := o.DB.Begin()
 	err = o.cleanAccount(tx)
-	users, err := o.cleanUser(tx)
+	err = o.cleanUser(tx)
 	err = o.cleanDep(tx)
 	if err != nil {
+		logger.Logger.Info(err)
 		tx.Rollback()
-		return err
-
+	} else {
+		tx.Commit()
 	}
-	tx.Commit()
 
 	ctx := context.Background()
 	ctx = header2.SetContext(ctx, user.TenantID, "")
-	o.search.PushUser(ctx, users...)
-	o.search.PushDep(ctx)
-	after := time.After(30 * time.Second)
-	select {
-	case <-after:
-		logger.Logger.Info("job done")
+	list, _ := o.newUserRepo.PageList(ctx, o.DB, 0, 1, 10000, nil)
+	if len(list) > 0 {
+		u := make(chan int, 1)
+		d := make(chan int, 1)
+
+		o.search.PushUser(ctx, u, list...)
+		o.search.PushDep(ctx, d)
+		var num = 0
+		for {
+			if num >= 2 {
+				fmt.Println("done")
+				break
+			}
+			select {
+			case n := <-u:
+				num = num + n
+			case m := <-d:
+				num = num + m
+			}
+		}
 	}
 	return nil
 }
@@ -146,7 +159,7 @@ func (o *Data) cleanDep(tx *gorm.DB) error {
 	return nil
 }
 
-func (o *Data) cleanUser(tx *gorm.DB) ([]*org.User, error) {
+func (o *Data) cleanUser(tx *gorm.DB) error {
 	allOldUsers := o.oldUserRepo.All(o.DB)
 
 	users := make([]*org.User, 0)
@@ -193,5 +206,5 @@ func (o *Data) cleanUser(tx *gorm.DB) ([]*org.User, error) {
 	if len(depRelations) > 0 {
 		err = o.newUserDepRepo.InsertBranch(tx, depRelations...)
 	}
-	return users, err
+	return err
 }

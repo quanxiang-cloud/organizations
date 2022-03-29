@@ -297,7 +297,7 @@ func (u *user) Add(c context.Context, r *AddUserRequest) (res *AddUserResponse, 
 		SendAccountAndPWDOrCode(c, u.message, "", r.SendMessage.SendTo, u.conf.MessageTemplate.NewPWD, r.Password, r.SendMessage.SendChannel)
 	}
 	//push data to search
-	u.search.PushUser(c, addData)
+	u.search.PushUser(c, nil, addData)
 	return &adminUser, err
 }
 
@@ -427,7 +427,7 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		}
 	}
 	tx.Commit()
-	u.search.PushUser(c, updateData)
+	u.search.PushUser(c, nil, updateData)
 	return &UpdateUserResponse{ID: r.ID}, nil
 }
 
@@ -462,7 +462,7 @@ func (u *user) UpdateAvatar(c context.Context, r *UpdateUserAvatarRequest) (*Upd
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, old)
+	u.search.PushUser(c, nil, old)
 	return &UpdateUserAvatarResponse{}, nil
 }
 
@@ -855,7 +855,7 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, old)
+	u.search.PushUser(c, nil, old)
 	return &StatusResponse{}, nil
 }
 
@@ -925,7 +925,7 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 
 	}
 	if len(users) > 0 {
-		u.search.PushUser(c, users...)
+		u.search.PushUser(c, nil, users...)
 	}
 	go func() {
 		if r.UseStatus == consts.ActiveStatus {
@@ -969,7 +969,7 @@ func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest)
 	}
 	tx.Commit()
 	users := u.userRepo.List(c, u.DB, rq.UsersID...)
-	u.search.PushUser(c, users...)
+	u.search.PushUser(c, nil, users...)
 	return nil, nil
 }
 

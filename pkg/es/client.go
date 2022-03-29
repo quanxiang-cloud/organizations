@@ -42,35 +42,41 @@ func new(conf *es2.Config, log logger.AdaptedLogger) *Client {
 }
 
 // AddUser add user to es
-func (e *Client) AddUser(ctx context.Context, entiy *v1alpha1.User) error {
+func (e *Client) AddUser(ctx context.Context, entiy []v1alpha1.User) error {
 	if entiy == nil {
 		return errors.New("nil data")
 	}
-	_, err := e.esClient.Index().Index(v1alpha1.UserIndex).BodyJson(entiy).Do(ctx)
-	if err != nil {
-		return err
+	for k := range entiy {
+		_, err := e.esClient.Index().Index(v1alpha1.UserIndex).BodyJson(entiy[k]).Do(ctx)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
 // DelUser del user from es
-func (e *Client) DelUser(ctx context.Context, entiy *v1alpha1.User) error {
+func (e *Client) DelUser(ctx context.Context, entiy []v1alpha1.User) error {
 	if entiy == nil {
 		return errors.New("nil data")
 	}
 
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	queries := make([]elastic.Query, 0)
-	queries = append(queries, elastic.NewTermQuery("id.keyword", entiy.ID))
-	if tenantID != "" {
-		queries = append(queries, elastic.NewTermQuery("tenantID.keyword", tenantID))
-	} else {
-		queries = append(queries, elastic.NewExistsQuery("tenantID.keyword"))
+	for k := range entiy {
+		queries := make([]elastic.Query, 0)
+		queries = append(queries, elastic.NewTermQuery("id.keyword", entiy[k].ID))
+		if tenantID != "" {
+			queries = append(queries, elastic.NewTermQuery("tenantID.keyword", tenantID))
+		} else {
+			queries = append(queries, elastic.NewExistsQuery("tenantID.keyword"))
+		}
+		_, err := e.esClient.DeleteByQuery().Index(v1alpha1.UserIndex).Query(elastic.NewBoolQuery().Must(queries...)).Do(ctx)
+		if err != nil {
+			return err
+		}
 	}
-	_, err := e.esClient.DeleteByQuery().Index(v1alpha1.UserIndex).Query(elastic.NewBoolQuery().Must(queries...)).Do(ctx)
-	if err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -118,14 +124,16 @@ type Search struct {
 
 // SearchUser es user
 type SearchUser struct {
-	User *v1alpha1.User
+	User []v1alpha1.User
 	Ctx  context.Context
+	Sig  chan int
 }
 
 // SearchDepartment es department
 type SearchDepartment struct {
 	Deps []v1alpha1.Department
 	Ctx  context.Context
+	Sig  chan int
 }
 
 // GetSearch get search
@@ -166,9 +174,15 @@ func (s *Search) process(ctx context.Context) {
 		case entity := <-s.user:
 			s.client.DelUser(entity.Ctx, entity.User)
 			s.client.AddUser(entity.Ctx, entity.User)
+			if entity.Sig != nil {
+				entity.Sig <- 1
+			}
 		case entity := <-s.dep:
 			s.client.DelDepartment(entity.Ctx)
 			s.client.AddDepartment(entity.Ctx, entity.Deps)
+			if entity.Sig != nil {
+				entity.Sig <- 1
+			}
 		}
 	}
 }

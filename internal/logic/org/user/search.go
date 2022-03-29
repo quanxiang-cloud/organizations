@@ -41,11 +41,13 @@ type Search struct {
 type SearchUser struct {
 	User []*org.User
 	Ctx  context.Context
+	Sig  chan int
 }
 
 // SearchDepartment push data
 type SearchDepartment struct {
 	Ctx context.Context
+	Sig chan int
 }
 
 // NewSearch new
@@ -86,9 +88,12 @@ func (s *Search) process(ctx context.Context) {
 }
 
 // PushUser push data
-func (s *Search) PushUser(ctx context.Context, user ...*org.User) {
+func (s *Search) PushUser(ctx context.Context, sig chan int, user ...*org.User) {
 	if len(user) > 0 {
 		u := new(SearchUser)
+		if sig != nil {
+			u.Sig = sig
+		}
 		u.User = append(u.User, user...)
 		u.Ctx = ctx
 		s.user <- u
@@ -96,9 +101,12 @@ func (s *Search) PushUser(ctx context.Context, user ...*org.User) {
 }
 
 // PushDep push data
-func (s *Search) PushDep(ctx context.Context) {
+func (s *Search) PushDep(ctx context.Context, sig chan int) {
 	d := new(SearchDepartment)
 	d.Ctx = ctx
+	if sig != nil {
+		d.Sig = sig
+	}
 
 	s.dep <- d
 
@@ -118,6 +126,9 @@ func (s *Search) pushDepToSearch(dep *SearchDepartment) {
 			departments.Deps = append(departments.Deps, department)
 		}
 		search := es.GetSearch()
+		if dep.Sig != nil {
+			departments.Sig = dep.Sig
+		}
 		search.AddDepartmentSearch(departments)
 	}
 }
@@ -131,8 +142,9 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 	for k := range allDeps {
 		depMap[allDeps[k].ID] = &allDeps[k]
 	}
+	esData := new(es.SearchUser)
 	for _, v := range user.User {
-		esData := new(es.SearchUser)
+
 		eu := new(v1alpha1.User)
 		esData.Ctx = user.Ctx
 		eu.ID = v.ID
@@ -170,10 +182,13 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 		//寻找leader，从当前到顶层
 		leaderToTop := s.getLeaderToTop(user.Ctx, v.ID)
 		eu.Leaders = append(eu.Leaders, leaderToTop...)
-		esData.User = eu
-		search.AddUserSearch(esData)
+		esData.User = append(esData.User, *eu)
 
 	}
+	if user.Sig != nil {
+		esData.Sig = user.Sig
+	}
+	search.AddUserSearch(esData)
 
 }
 

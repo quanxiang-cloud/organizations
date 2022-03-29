@@ -158,7 +158,7 @@ func (d *department) SetDEPLeader(c context.Context, r *SetDEPLeaderRequest) (*S
 	}
 	tx.Commit()
 	user := d.userRepo.Get(c, d.DB, r.UserID)
-	d.search.PushUser(c, user)
+	d.search.PushUser(c, nil, user)
 	return nil, nil
 
 }
@@ -191,7 +191,7 @@ func (d *department) CancelDEPLeader(c context.Context, r *CancelDEPLeaderReques
 		}
 		tx.Commit()
 		user := d.userRepo.Get(c, d.DB, r.UserID)
-		d.search.PushUser(c, user)
+		d.search.PushUser(c, nil, user)
 	}
 
 	return nil, nil
@@ -258,7 +258,7 @@ func (d *department) Add(c context.Context, r *AddRequest) (res *AddResponse, er
 		return nil, err
 	}
 	tx.Commit()
-	d.search.PushDep(c)
+	d.search.PushDep(c, nil)
 	adminDepartment := AddResponse{}
 	adminDepartment.ID = id
 	return &adminDepartment, nil
@@ -327,10 +327,10 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 				userIDs = append(userIDs, relations[k].UserID)
 			}
 			users := d.userRepo.List(c, d.DB, userIDs...)
-			d.search.PushUser(c, users...)
+			d.search.PushUser(c, nil, users...)
 		}
 
-		d.search.PushDep(c)
+		d.search.PushDep(c, nil)
 		return nil, nil
 	}
 	return nil, error2.New(code.InvalidUpdate)
@@ -573,7 +573,7 @@ func (d *department) Delete(c context.Context, r *DelOneRequest) (*DelOneRespons
 		return nil, err
 	}
 	tx.Commit()
-	d.search.PushDep(c)
+	d.search.PushDep(c, nil)
 	return nil, nil
 }
 
