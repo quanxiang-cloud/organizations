@@ -14,6 +14,7 @@ limitations under the License.
 */
 import (
 	"flag"
+	"github.com/quanxiang-cloud/organizations/pkg/es"
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
@@ -34,7 +35,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+	es.New(&conf.Elastic, adaptedLogger)
 	v1, err := logic.NewCleanV1(conf, adaptedLogger)
 	if err != nil {
 		panic(err)

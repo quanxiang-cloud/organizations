@@ -14,8 +14,8 @@ limitations under the License.
 */
 import (
 	"context"
-
 	"gorm.io/gorm"
+	"time"
 
 	id2 "github.com/quanxiang-cloud/cabin/id"
 	"github.com/quanxiang-cloud/cabin/logger"
@@ -95,6 +95,11 @@ func (o *Data) CleanV1() error {
 	ctx = header2.SetContext(ctx, user.TenantID, "")
 	o.search.PushUser(ctx, users...)
 	o.search.PushDep(ctx)
+	after := time.After(30 * time.Second)
+	select {
+	case <-after:
+		logger.Logger.Info("job done")
+	}
 	return nil
 }
 
