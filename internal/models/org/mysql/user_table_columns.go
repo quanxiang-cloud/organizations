@@ -66,6 +66,9 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id = ?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	if status != 0 {
 		db = db.Where("status = ?", status)
 	}

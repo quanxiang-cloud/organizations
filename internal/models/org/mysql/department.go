@@ -49,14 +49,20 @@ func (d *departmentRepo) Update(ctx context.Context, tx *gorm.DB, req *org.Depar
 
 func (d *departmentRepo) Delete(ctx context.Context, tx *gorm.DB, id ...string) (err error) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	err = tx.Where("tenant_id=? and id in (?)", tenantID, id).Delete(&org.Department{}).Error
+	tx = tx.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		tx = tx.Or("tenant_id is null")
+	}
+	err = tx.Where("id in(?)", id).Delete(&org.Department{}).Error
 	return err
 }
 
 func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (list []org.Department) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
-
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	db = db.Where("id in (?)", id)
 
 	db = db.Order("updated_at desc")
@@ -72,6 +78,9 @@ func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (l
 func (d *departmentRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int) (list []org.Department, total int64) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
@@ -106,6 +115,9 @@ func (d *departmentRepo) SelectByPID(ctx context.Context, db *gorm.DB, pid strin
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	db = db.Where("pid=?", pid)
 	if status != 0 {
 		db = db.Where("use_status=?", status)
@@ -126,6 +138,9 @@ func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, su
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	db = db.Where("pid=? and name=? and use_status=1", superPID, name)
 	affected := db.Find(&res).RowsAffected
 	if affected > 0 {
@@ -138,6 +153,9 @@ func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Dep
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	db = db.Where("(pid='' or pid is null) and use_status=1")
 	affected := db.Find(&res).RowsAffected
 	if affected == 1 {
@@ -149,6 +167,9 @@ func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Dep
 func (d *departmentRepo) Count(ctx context.Context, db *gorm.DB, status int) (total int64) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
@@ -160,7 +181,9 @@ func (d *departmentRepo) Count(ctx context.Context, db *gorm.DB, status int) (to
 func (d *departmentRepo) GetMaxGrade(ctx context.Context, db *gorm.DB) int64 {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	db = db.Where("tenant_id=?", tenantID)
-
+	if tenantID == "" {
+		db = db.Or("tenant_id is null")
+	}
 	db = db.Select("max(grade) as grade")
 
 	var num int64
