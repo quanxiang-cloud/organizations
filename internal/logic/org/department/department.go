@@ -320,11 +320,8 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 		}
 		tx.Commit()
 
-		relations := d.userDepRepo.SelectByDEPID(d.DB, r.ID)
-		if len(relations) > 0 {
-			users := d.findChangeUsers(c, r.ID)
-			d.search.PushUser(c, nil, users...)
-		}
+		users := d.findChangeUsers(c, r.ID)
+		d.search.PushUser(c, nil, users...)
 
 		d.search.PushDep(c, nil)
 		return nil, nil
