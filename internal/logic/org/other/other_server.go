@@ -60,6 +60,7 @@ type othersServer struct {
 	ldap           ldap.Ldap
 	conf           configs.Config
 	userLeaderRepo org.UserLeaderRelationRepo
+	search         *user.Search
 }
 
 // NewOtherServer 实例
@@ -76,6 +77,7 @@ func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.Universa
 		ldap:           ldap.NewLdap(conf.InternalNet),
 		conf:           conf,
 		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
+		search:         user.GetSearch(),
 	}
 }
 
@@ -137,7 +139,22 @@ func (u *othersServer) AddUsers(c context.Context, r *AddUsersRequest) (res *Add
 	}
 	res = &AddListResponse{}
 	res.Result = result
+	u.pushUserToSearch(c)
 	return res, nil
+}
+
+func (u *othersServer) pushUserToSearch(c context.Context) {
+	var index = 1
+	var size = 300
+	for {
+		list, _ := u.userRepo.PageList(c, u.DB, 0, index, size, nil)
+		if len(list) > 0 {
+			u.search.PushUser(c, nil, list...)
+			index++
+			continue
+		}
+		break
+	}
 }
 
 // AddDepartmentRequest other server add  department to org request
@@ -182,6 +199,10 @@ func (u *othersServer) AddDepartments(c context.Context, r *AddDepartmentRequest
 	res = &AddListResponse{}
 	res.Result = result
 	return res, nil
+}
+
+func (u *othersServer) pushDepToSearch(c context.Context) {
+	u.search.PushDep(c, nil)
 }
 
 //GetUserByIDsRequest get user by ids request

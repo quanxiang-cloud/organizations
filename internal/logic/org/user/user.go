@@ -407,6 +407,7 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 			}
 		}
 	}
+
 	if len(r.Leader) > 0 {
 
 		err = u.userLeaderRepo.DeleteByUserIDs(tx, r.ID)
@@ -434,7 +435,40 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 	}
 	tx.Commit()
 	u.search.PushUser(c, nil, updateData)
+	if len(r.Leader) > 0 {
+		users := findChild(c, u, r.ID)
+		if len(users) > 0 {
+			u.search.PushUser(c, nil, users...)
+		}
+	}
 	return &UpdateUserResponse{ID: r.ID}, nil
+}
+func findChild(c context.Context, u *user, leaderID ...string) []*org.User {
+	userIDs := getChildUser(c, u, leaderID...)
+	userIDMap := make(map[string]string)
+	for k := range userIDs {
+		userIDMap[userIDs[k]] = userIDs[k]
+	}
+	ids := make([]string, 0)
+	for _, v := range userIDMap {
+		ids = append(ids, v)
+	}
+	if len(ids) > 0 {
+		return u.userRepo.List(c, u.DB, ids...)
+	}
+	return nil
+}
+
+func getChildUser(c context.Context, u *user, leaderID ...string) []string {
+	leaderRelations := u.userLeaderRepo.SelectByLeaderID(u.DB, leaderID...)
+	ids := make([]string, 0)
+	for k := range leaderRelations {
+		ids = append(ids, leaderRelations[k].UserID)
+	}
+	if len(ids) > 0 {
+		ids = append(ids, getChildUser(c, u, ids...)...)
+	}
+	return ids
 }
 
 // UpdateUserAvatarRequest update avatar request

@@ -43,9 +43,9 @@ func (u *userLeaderRelationRepo) DeleteByUserIDs(tx *gorm.DB, userID ...string) 
 	return err
 }
 
-func (u *userLeaderRelationRepo) SelectByLeaderID(db *gorm.DB, leaderID string) []org.UserLeaderRelation {
+func (u *userLeaderRelationRepo) SelectByLeaderID(db *gorm.DB, leaderID ...string) []org.UserLeaderRelation {
 	relations := make([]org.UserLeaderRelation, 0)
-	affected := db.Where("leader_id=?", leaderID).Find(&relations).RowsAffected
+	affected := db.Where("leader_id in(?)", leaderID).Find(&relations).RowsAffected
 	if affected > 0 {
 		return relations
 	}
