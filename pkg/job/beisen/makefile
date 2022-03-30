@@ -3,7 +3,7 @@ version=v0.0.11syncjob
 devHost=192.168.200.20
 devUser=ubuntu
 repository=lowcode
-dockerHost=dockerhub.qingcloud.com
+dockerHost=qxcr.xyz
 
 env:
 #-- open go mod vendor --

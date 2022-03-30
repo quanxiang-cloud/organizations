@@ -1,9 +1,9 @@
 name=organizations
-version=cleandatajobv1v1.0.3
+version=cjobv1.0.3.4
 devHost=192.168.200.20
 devUser=ubuntu
 repository=lowcode
-dockerHost=dockerhub.qingcloud.com
+dockerHost=qxcr.xyz
 
 env:
 #-- open go mod vendor --
