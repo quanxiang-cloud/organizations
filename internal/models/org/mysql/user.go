@@ -63,9 +63,10 @@ func (u *userRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limi
 		db = db.Where("use_status=?", status)
 	}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	db = db.Order("updated_at desc")
 	users := make([]*org.User, 0)
@@ -95,9 +96,11 @@ func (u *userRepo) Get(ctx context.Context, db *gorm.DB, id string) (res *org.Us
 func (u *userRepo) List(ctx context.Context, db *gorm.DB, id ...string) (res []*org.User) {
 	users := make([]*org.User, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	affected := db.Model(&org.User{}).Where("id in (?)", id).Find(&users).RowsAffected
 	if affected > 0 {
@@ -109,9 +112,10 @@ func (u *userRepo) List(ctx context.Context, db *gorm.DB, id ...string) (res []*
 func (u *userRepo) SelectByEmailOrPhone(ctx context.Context, db *gorm.DB, info string) (res *org.User) {
 	user := org.User{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	affected := db.Model(&org.User{}).Where("email=? or phone=?", info, info).Find(&user).RowsAffected
 	if affected == 1 {
@@ -149,9 +153,10 @@ func (u *userRepo) Count(ctx context.Context, db *gorm.DB, status, activeStatus 
 	var num1 int64
 	var num2 int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	if status != 0 {
 		db.Model(&org.User{}).Where("use_status=?", status).Count(&num1)

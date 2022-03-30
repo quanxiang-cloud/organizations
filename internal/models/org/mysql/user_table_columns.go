@@ -65,9 +65,10 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 	users := make([]org.UserTableColumns, 0)
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id = ?", tenantID)
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	if status != 0 {
 		db = db.Where("status = ?", status)
@@ -84,7 +85,11 @@ func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, statu
 	filter := make(map[string]string)
 	useColumns := make([]org.UserTableColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id = ?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if attr != 0 {
 		db = db.Where("attr = ?", attr)
 	}
@@ -108,7 +113,11 @@ func (u *userTableColumnsRepo) GetXlsxField(ctx context.Context, db *gorm.DB, st
 	fields := make(map[string]string)
 	useColumns := make([]org.UserTableColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id = ?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db = db.Where("status = ?", status)
 	}

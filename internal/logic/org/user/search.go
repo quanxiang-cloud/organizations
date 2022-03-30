@@ -60,8 +60,8 @@ func NewSearch(db *gorm.DB, userRepo org.UserRepo, userLeaderRepo org.UserLeader
 		userDepRepo:    userDepRepo,
 		userLeaderRepo: userLeaderRepo,
 		depRepo:        depRepo,
-		user:           make(chan *SearchUser, 1),
-		dep:            make(chan *SearchDepartment, 1),
+		user:           make(chan *SearchUser),
+		dep:            make(chan *SearchDepartment),
 	}
 	go search.process(search.ctx)
 

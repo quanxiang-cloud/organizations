@@ -48,9 +48,10 @@ func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.Use
 func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int) (res []org.UseColumns) {
 	data := make([]org.UseColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
 	if tenantID == "" {
-		db = db.Or("tenant_id is null")
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
 	}
 	if status != 0 {
 		db = db.Where("viewer_status=?", status)
