@@ -138,7 +138,27 @@ func (d *departmentRepo) SelectByPID(ctx context.Context, db *gorm.DB, pid strin
 	return nil, 0
 }
 
-func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, superPID, name string) (one *org.Department) {
+func (d *departmentRepo) SelectByPIDs(ctx context.Context, db *gorm.DB, status int, pid ...string) (list []org.Department) {
+	departments := make([]org.Department, 0)
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
+	db = db.Where("pid in (?)", pid)
+	if status != 0 {
+		db = db.Where("use_status=?", status)
+	}
+
+	affected := db.Find(&departments).RowsAffected
+	if affected > 0 {
+		return departments
+	}
+	return nil
+}
+
+func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, pid, name string) (one *org.Department) {
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
@@ -146,7 +166,7 @@ func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, su
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
-	db = db.Where("pid=? and name=? and use_status=1", superPID, name)
+	db = db.Where("pid=? and name=? and use_status=1", pid, name)
 	affected := db.Find(&res).RowsAffected
 	if affected > 0 {
 		return &res

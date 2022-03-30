@@ -322,11 +322,7 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 
 		relations := d.userDepRepo.SelectByDEPID(d.DB, r.ID)
 		if len(relations) > 0 {
-			userIDs := make([]string, 0, len(relations))
-			for k := range relations {
-				userIDs = append(userIDs, relations[k].UserID)
-			}
-			users := d.userRepo.List(c, d.DB, userIDs...)
+			users := d.findChangeUsers(c, r.ID)
 			d.search.PushUser(c, nil, users...)
 		}
 
@@ -334,7 +330,42 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 		return nil, nil
 	}
 	return nil, error2.New(code.InvalidUpdate)
+}
 
+func (d *department) findChangeUsers(c context.Context, departmentID ...string) []*org.User {
+	ids := d.findChildDep(c, departmentID...)
+	depIDMap := make(map[string]string)
+	for k := range ids {
+		depIDMap[ids[k]] = ids[k]
+	}
+	depIDs := make([]string, 0)
+	for _, v := range depIDMap {
+		depIDs = append(depIDs, v)
+	}
+	depIDs = append(depIDs, departmentID...)
+	if len(depIDs) > 0 {
+		userID := make([]string, 0)
+		relations := d.userDepRepo.SelectByDEPID(d.DB, depIDs...)
+		for k := range relations {
+			userID = append(userID, relations[k].UserID)
+		}
+		if len(userID) > 0 {
+			return d.userRepo.List(c, d.DB, userID...)
+		}
+	}
+	return nil
+}
+
+func (d *department) findChildDep(c context.Context, departmentID ...string) []string {
+	departments := d.depRepo.SelectByPIDs(c, d.DB, consts.NormalStatus, departmentID...)
+	depIDs := make([]string, 0)
+	for k := range departments {
+		depIDs = append(depIDs, departments[k].ID)
+	}
+	if len(depIDs) > 0 {
+		depIDs = append(depIDs, d.findChildDep(c, depIDs...)...)
+	}
+	return depIDs
 }
 
 // ViewerSearchListRequest user search request
