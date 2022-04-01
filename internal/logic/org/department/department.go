@@ -311,6 +311,16 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 			dep.Attr = r.Attr
 			dep.Grade = p.Grade + 1
 		}
+		if r.UseStatus != 0 && r.UseStatus != consts.NormalStatus {
+			list, _ := d.depRepo.SelectByPID(c, d.DB, r.ID, consts.NormalStatus, 1, 1000)
+			if len(list) > 0 {
+				return nil, error2.New(code.InvalidDELDEP)
+			}
+			relations := d.userDepRepo.SelectByDEPID(d.DB, r.ID)
+			if len(relations) > 0 {
+				return nil, error2.New(code.InvalidDELDEP)
+			}
+		}
 		tx := d.DB.Begin()
 		err := d.depRepo.Update(c, tx, dep)
 		err = d.updateChildGrade(c, dep.ID, dep.Grade, tx)

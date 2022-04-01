@@ -105,7 +105,7 @@ var CodeTable = error2.Table{
 	InvalidParams:           "无效或错误参数.",
 	InvalidTimestamp:        "无效的时间格式.",
 	NameUsed:                "名称已被使用！请检查后重试！",
-	InvalidDELDEP:           "当前部门下还存在关联用户，不能进行删除！",
+	InvalidDELDEP:           "当前部门下还存在关联用户或子部门，不能进行删除！",
 	InvalidFile:             "无效的文件.",
 	AccountPasswordCountErr: "账号或密码(验证码)错误，请检查后重试！你还有%d次尝试机会！",
 	InvalidAccount:          "账号不存在或已被禁用，请检查后重试！",
