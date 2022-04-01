@@ -281,36 +281,33 @@ type UpdateResponse struct {
 
 // Update update
 func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateResponse, error) {
+	if r.PID == r.ID {
+		return nil, error2.New(code.InvalidDEPID)
+	}
 	upUinx := time.NowUnix()
 	dep := d.depRepo.Get(c, d.DB, r.ID)
+
 	if dep != nil {
-		if r.PID == "" || r.PID == dep.PID {
-			dep.ID = r.ID
-			dep.Name = r.Name
-			dep.UseStatus = consts.NormalStatus
-			dep.UpdatedAt = upUinx
-			dep.UpdatedBy = r.UpdateBy
-			dep.Attr = r.Attr
-		} else {
-			if r.PID == r.ID {
-				return nil, error2.New(code.InvalidDEPID)
-			}
-			if d.checkNewPIDIsChildID(c, r.ID, r.PID) {
-				return nil, error2.New(code.CanNotMoveParentToChild)
-			}
-			one := d.depRepo.SelectByPIDAndName(c, d.DB, r.PID, r.Name)
-			if one != nil && one.ID != "" {
-				return nil, error2.New(code.NameUsed)
-			}
-			p := d.depRepo.Get(c, d.DB, r.PID)
-			dep.ID = r.ID
-			dep.Name = r.Name
-			dep.UseStatus = r.UseStatus
-			dep.UpdatedAt = upUinx
-			dep.PID = r.PID
-			dep.Attr = r.Attr
-			dep.Grade = p.Grade + 1
+
+		if d.checkNewPIDIsChildID(c, r.ID, r.PID) {
+			return nil, error2.New(code.CanNotMoveParentToChild)
 		}
+		one := d.depRepo.SelectByPIDAndName(c, d.DB, r.PID, r.Name)
+		if one != nil && one.ID != "" {
+			return nil, error2.New(code.NameUsed)
+		}
+		dep.Name = r.Name
+		dep.UseStatus = r.UseStatus
+		dep.UpdatedAt = upUinx
+		dep.Attr = r.Attr
+		if r.PID != "" && dep.PID != r.PID {
+			p := d.depRepo.Get(c, d.DB, r.PID)
+			if p != nil {
+				dep.Grade = p.Grade + 1
+			}
+			dep.PID = r.PID
+		}
+		tx := d.DB.Begin()
 		if r.UseStatus != 0 && r.UseStatus != consts.NormalStatus {
 			list, _ := d.depRepo.SelectByPID(c, d.DB, r.ID, consts.NormalStatus, 1, 1000)
 			if len(list) > 0 {
@@ -320,18 +317,26 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 			if len(relations) > 0 {
 				return nil, error2.New(code.InvalidDELDEP)
 			}
+			if r.UseStatus == consts.DelStatus {
+				err := d.depRepo.Delete(c, tx, r.ID)
+				err = d.userDepRepo.DeleteByDepIDs(tx, r.ID)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				tx.Commit()
+			}
+		} else {
+			err := d.depRepo.Update(c, tx, dep)
+			err = d.updateChildGrade(c, dep.ID, dep.Grade, tx)
+			if err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+			tx.Commit()
+			users := d.findChangeUsers(c, r.ID)
+			d.search.PushUser(c, nil, users...)
 		}
-		tx := d.DB.Begin()
-		err := d.depRepo.Update(c, tx, dep)
-		err = d.updateChildGrade(c, dep.ID, dep.Grade, tx)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		tx.Commit()
-
-		users := d.findChangeUsers(c, r.ID)
-		d.search.PushUser(c, nil, users...)
 
 		d.search.PushDep(c, nil)
 		return nil, nil
