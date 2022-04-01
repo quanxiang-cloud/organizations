@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -58,8 +59,9 @@ var emailOrPhone validator.Func = func(fl validator.FieldLevel) bool {
 
 // CheckEmail 检查是否邮箱
 func CheckEmail(userName string) bool {
+	lower := strings.ToLower(userName)
 	emailCompile := regexp.MustCompile(emailRegexString)
-	return emailCompile.MatchString(userName)
+	return emailCompile.MatchString(lower)
 }
 
 // CheckPhone 检查是否手机
