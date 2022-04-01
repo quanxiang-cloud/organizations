@@ -123,7 +123,7 @@ func (u *account) UpdatePassword(c context.Context, r *UpdatePasswordRequest) (*
 			ID:       accounts[0].ID,
 			Password: encode2.MD5Encode(r.Password),
 		}
-		err := u.accountRepo.Update(tx, &u2)
+		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
@@ -175,7 +175,7 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 			ID:       r.UserIDs[k],
 			Password: encode2.MD5Encode(newPWD),
 		}
-		err := u.accountRepo.Update(tx, &u2)
+		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
