@@ -505,9 +505,13 @@ func (u *account) FirstUpdatePassword(c context.Context, r *FirstSetPasswordRequ
 		UserID:   r.UserID,
 		Password: encode2.MD5Encode(r.NewPassword),
 	}
-	u.accountRepo.UpdatePasswordByUserID(tx, u2)
+	err := u.accountRepo.UpdatePasswordByUserID(tx, u2)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
 	oldUser.PasswordStatus = oldUser.PasswordStatus + 1
-	err := u.user.UpdateByID(c, tx, oldUser)
+	err = u.user.UpdateByID(c, tx, oldUser)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
