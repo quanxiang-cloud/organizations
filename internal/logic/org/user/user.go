@@ -79,7 +79,7 @@ type user struct {
 
 //NewUser new
 func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) User {
-	NewSearch(db, mysql2.NewUserRepo(), mysql2.NewUserLeaderRelationRepo(), mysql2.NewUserDepartmentRelationRepo(), mysql2.NewDepartmentRepo())
+
 	return &user{
 		userRepo:       mysql2.NewUserRepo(),
 		userDepRepo:    mysql2.NewUserDepartmentRelationRepo(),

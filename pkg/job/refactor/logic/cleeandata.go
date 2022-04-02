@@ -69,7 +69,7 @@ func NewCleanV1(conf *configs.Config, log logger.AdaptedLogger) (*Data, error) {
 		newUserLeaderRepo: newmodels.NewUserLeaderRelationRepo(),
 		newUserTenantRepo: newmodels.NewUserTenantRelationRepo(),
 	}
-	user.NewSearch(db, d.newUserRepo, d.newUserLeaderRepo, d.newUserDepRepo, d.newDepRepo)
+	user.NewSearch(db)
 	d.search = user.GetSearch()
 
 	return d, nil

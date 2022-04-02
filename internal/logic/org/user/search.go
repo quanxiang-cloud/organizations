@@ -20,6 +20,7 @@ import (
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/organizations/internal/models/org"
+	mysql2 "github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
 	"github.com/quanxiang-cloud/organizations/pkg/es"
 	"github.com/quanxiang-cloud/search/pkg/apis/v1alpha1"
 )
@@ -52,14 +53,14 @@ type SearchDepartment struct {
 }
 
 // NewSearch new
-func NewSearch(db *gorm.DB, userRepo org.UserRepo, userLeaderRepo org.UserLeaderRelationRepo, userDepRepo org.UserDepartmentRelationRepo, depRepo org.DepartmentRepo) {
+func NewSearch(db *gorm.DB) {
 	search = &Search{
 		ctx:            context.Background(),
 		db:             db,
-		userRepo:       userRepo,
-		userDepRepo:    userDepRepo,
-		userLeaderRepo: userLeaderRepo,
-		depRepo:        depRepo,
+		userRepo:       mysql2.NewUserRepo(),
+		userDepRepo:    mysql2.NewUserDepartmentRelationRepo(),
+		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
+		depRepo:        mysql2.NewDepartmentRepo(),
 		user:           make(chan *SearchUser),
 		dep:            make(chan *SearchDepartment),
 	}

@@ -38,17 +38,19 @@ type UserAPI struct {
 	log         logger.AdaptedLogger
 	conf        configs.Config
 	redisClient redis.UniversalClient
-	search      user.Search
+	search      *user.Search
 }
 
 // NewUserAPI new
 func NewUserAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger) UserAPI {
+	user.NewSearch(db)
 	return UserAPI{
 		user:        user.NewUser(conf, db, redisClient),
 		other:       other.NewOtherServer(conf, db, redisClient),
 		log:         log,
 		conf:        conf,
 		redisClient: redisClient,
+		search:      user.GetSearch(),
 	}
 }
 
