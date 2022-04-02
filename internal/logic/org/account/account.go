@@ -120,7 +120,7 @@ func (u *account) UpdatePassword(c context.Context, r *UpdatePasswordRequest) (*
 		}
 		tx := u.DB.Begin()
 		u2 := org.Account{
-			ID:       accounts[0].ID,
+			UserID:   accounts[0].UserID,
 			Password: encode2.MD5Encode(r.Password),
 		}
 		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
@@ -172,7 +172,6 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 	for k := range r.UserIDs {
 		newPWD := user.CreatePassword(c, u.conf, u.redisClient)
 		u2 := org.Account{
-			ID:       r.UserIDs[k],
 			UserID:   r.UserIDs[k],
 			Password: encode2.MD5Encode(newPWD),
 		}
