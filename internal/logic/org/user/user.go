@@ -443,7 +443,7 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 			response.Users = append(response.Users, users...)
 		}
 	}
-	return &UpdateUserResponse{ID: r.ID}, nil
+	return response, nil
 }
 func findChild(c context.Context, u *user, leaderID ...string) []*org.User {
 	userIDs := getChildUser(c, u, leaderID...)
@@ -989,7 +989,7 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 		}
 	}()
 
-	return nil, nil
+	return response, nil
 }
 
 // ChangeUsersDEPRequest change user dep request
@@ -1339,6 +1339,7 @@ type RegisterRequest struct {
 
 // RegisterResponse register response
 type RegisterResponse struct {
+	User *org.User `json:"-"`
 }
 
 // Register register
@@ -1415,7 +1416,8 @@ func (u *user) Register(c context.Context, r *RegisterRequest) (*RegisterRespons
 	}
 
 	tx.Commit()
-	return nil, nil
+
+	return &RegisterResponse{User: addData}, nil
 }
 
 // CreatePassword create password

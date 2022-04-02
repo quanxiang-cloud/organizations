@@ -338,6 +338,9 @@ func (u *UserAPI) Register(c *gin.Context) {
 	r.Profile = header2.GetProfile(c)
 	r.Header = r.Header.Clone()
 	res, err := u.user.Register(ginheader.MutateContext(c), r)
+	if err == nil && res.User != nil {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.User)
+	}
 	resp.Format(res, err).Context(c)
 	return
 }

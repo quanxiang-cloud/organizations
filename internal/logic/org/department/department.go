@@ -288,7 +288,7 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 	}
 	upUinx := time.NowUnix()
 	dep := d.depRepo.Get(c, d.DB, r.ID)
-	response := UpdateResponse{}
+	response := &UpdateResponse{}
 	if dep != nil {
 
 		if d.checkNewPIDIsChildID(c, r.ID, r.PID) {
@@ -340,7 +340,7 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 			response.Users = append(response.Users, users...)
 		}
 
-		return nil, nil
+		return response, nil
 	}
 	return nil, error2.New(code.InvalidUpdate)
 }
