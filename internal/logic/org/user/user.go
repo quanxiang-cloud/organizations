@@ -75,7 +75,6 @@ type user struct {
 	columnRepo     org.UserTableColumnsRepo
 	userTenantRepo org.UserTenantRelationRepo
 	landlord       landlord.Landlord
-	search         *Search
 }
 
 //NewUser new
@@ -97,7 +96,6 @@ func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient
 		columnRepo:     mysql2.NewUserTableColumnsRepo(),
 		userTenantRepo: mysql2.NewUserTenantRelationRepo(),
 		landlord:       landlord.NewLandlord(conf.InternalNet),
-		search:         GetSearch(),
 	}
 }
 
@@ -164,8 +162,9 @@ type SendMessage struct {
 
 // AddUserResponse admin user response
 type AddUserResponse struct {
-	ID       string `json:"id"`
-	Password string `json:"password,omitempty"`
+	ID       string      `json:"id"`
+	Password string      `json:"password,omitempty"`
+	Users    []*org.User `json:"-"`
 }
 
 // Add  add user
@@ -297,8 +296,7 @@ func (u *user) Add(c context.Context, r *AddUserRequest) (res *AddUserResponse, 
 		m[id] = r.Password
 		SendAccountAndPWDOrCode(c, u.message, "", r.SendMessage.SendTo, u.conf.MessageTemplate.NewPWD, r.Password, r.SendMessage.SendChannel)
 	}
-	//push data to search
-	u.search.PushUser(c, nil, addData)
+	adminUser.Users = append(adminUser.Users, addData)
 	return &adminUser, err
 }
 
@@ -326,7 +324,9 @@ type UpdateUserRequest struct {
 
 // UpdateUserResponse update response
 type UpdateUserResponse struct {
-	ID string `json:"id"`
+	ID         string      `json:"id"`
+	UpdateUser *org.User   `json:"-"`
+	Users      []*org.User `json:"-"`
 }
 
 // Update update base info
@@ -434,11 +434,13 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		}
 	}
 	tx.Commit()
-	u.search.PushUser(c, nil, updateData)
+	response := &UpdateUserResponse{ID: r.ID}
+	response.UpdateUser = updateData
+
 	if len(r.Leader) > 0 {
 		users := findChild(c, u, r.ID)
 		if len(users) > 0 {
-			u.search.PushUser(c, nil, users...)
+			response.Users = append(response.Users, users...)
 		}
 	}
 	return &UpdateUserResponse{ID: r.ID}, nil
@@ -480,9 +482,10 @@ type UpdateUserAvatarRequest struct {
 
 // UpdateUserAvatarResponse update avatar response
 type UpdateUserAvatarResponse struct {
-	ID       string `json:"id" binding:"required,max=64"`
-	Avatar   string `json:"avatar"`
-	UpdateBy string `json:"-"`
+	ID         string    `json:"id" binding:"required,max=64"`
+	Avatar     string    `json:"avatar"`
+	UpdateBy   string    `json:"-"`
+	UpdateUser *org.User `json:"-"`
 }
 
 // UpdateAvatar update avatar
@@ -502,8 +505,9 @@ func (u *user) UpdateAvatar(c context.Context, r *UpdateUserAvatarRequest) (*Upd
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, nil, old)
-	return &UpdateUserAvatarResponse{}, nil
+	response := &UpdateUserAvatarResponse{}
+	response.UpdateUser = old
+	return response, nil
 }
 
 // SearchListUserRequest 查询集合条件请求体
@@ -849,6 +853,7 @@ type StatusRequest struct {
 
 //StatusResponse response
 type StatusResponse struct {
+	User *org.User `json:"-"`
 }
 
 // UpdateUserStatus update one user status
@@ -900,8 +905,8 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, nil, old)
-	return &StatusResponse{}, nil
+
+	return &StatusResponse{User: old}, nil
 }
 
 //ListStatusRequest update list user status request
@@ -914,6 +919,7 @@ type ListStatusRequest struct {
 
 //ListStatusResponse update list user status response
 type ListStatusResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 //UpdateUsersStatus update list user status
@@ -969,8 +975,9 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 		users = append(users, old)
 
 	}
+	response := &ListStatusResponse{}
 	if len(users) > 0 {
-		u.search.PushUser(c, nil, users...)
+		response.Users = append(response.Users, users...)
 	}
 	go func() {
 		if r.UseStatus == consts.ActiveStatus {
@@ -994,6 +1001,7 @@ type ChangeUsersDEPRequest struct {
 
 // ChangeUsersDEPResponse change user dep response
 type ChangeUsersDEPResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 // AdminChangeUsersDEP change list user dep
@@ -1014,8 +1022,11 @@ func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest)
 	}
 	tx.Commit()
 	users := u.userRepo.List(c, u.DB, rq.UsersID...)
-	u.search.PushUser(c, nil, users...)
-	return nil, nil
+	response := &ChangeUsersDEPResponse{}
+	if len(users) > 0 {
+		response.Users = append(response.Users, users...)
+	}
+	return response, nil
 }
 
 func (u *user) getChildDep(c context.Context, depID string, depIDs []string, status int) []string {

@@ -20,7 +20,6 @@ import (
 	id2 "github.com/quanxiang-cloud/cabin/id"
 	"github.com/quanxiang-cloud/cabin/time"
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/consts"
-	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
 	"github.com/quanxiang-cloud/organizations/internal/models/org"
 	mysql2 "github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
 	"github.com/quanxiang-cloud/organizations/pkg/code"
@@ -64,7 +63,6 @@ type department struct {
 	userRepo    org.UserRepo
 	depRepo     org.DepartmentRepo
 	userDepRepo org.UserDepartmentRelationRepo
-	search      *user.Search
 }
 
 // NewDepartment new
@@ -73,7 +71,6 @@ func NewDepartment(db *gorm.DB) Department {
 		depRepo:     mysql2.NewDepartmentRepo(),
 		userDepRepo: mysql2.NewUserDepartmentRelationRepo(),
 		DB:          db,
-		search:      user.GetSearch(),
 		userRepo:    mysql2.NewUserRepo(),
 	}
 }
@@ -126,6 +123,7 @@ type SetDEPLeaderRequest struct {
 
 // SetDEPLeaderResponse set leader response
 type SetDEPLeaderResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 // SetDEPLeader set leader
@@ -158,8 +156,9 @@ func (d *department) SetDEPLeader(c context.Context, r *SetDEPLeaderRequest) (*S
 	}
 	tx.Commit()
 	user := d.userRepo.Get(c, d.DB, r.UserID)
-	d.search.PushUser(c, nil, user)
-	return nil, nil
+	response := &SetDEPLeaderResponse{}
+	response.Users = append(response.Users, user)
+	return response, nil
 
 }
 
@@ -172,6 +171,7 @@ type CancelDEPLeaderRequest struct {
 
 // CancelDEPLeaderResponse cancel leader response
 type CancelDEPLeaderResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 // CancelDEPLeader cancel leader request
@@ -182,6 +182,7 @@ func (d *department) CancelDEPLeader(c context.Context, r *CancelDEPLeaderReques
 		return nil, nil
 	}
 	tx := d.DB.Begin()
+	response := &CancelDEPLeaderResponse{}
 	if relation.Attr != r.Attr {
 		relation.Attr = r.Attr
 		err := d.userDepRepo.Update(tx, relation)
@@ -191,10 +192,11 @@ func (d *department) CancelDEPLeader(c context.Context, r *CancelDEPLeaderReques
 		}
 		tx.Commit()
 		user := d.userRepo.Get(c, d.DB, r.UserID)
-		d.search.PushUser(c, nil, user)
+
+		response.Users = append(response.Users, user)
 	}
 
-	return nil, nil
+	return response, nil
 }
 
 // AddRequest ad request
@@ -258,7 +260,6 @@ func (d *department) Add(c context.Context, r *AddRequest) (res *AddResponse, er
 		return nil, err
 	}
 	tx.Commit()
-	d.search.PushDep(c, nil)
 	adminDepartment := AddResponse{}
 	adminDepartment.ID = id
 	return &adminDepartment, nil
@@ -277,6 +278,7 @@ type UpdateRequest struct {
 
 // UpdateResponse update response
 type UpdateResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 // Update update
@@ -286,7 +288,7 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 	}
 	upUinx := time.NowUnix()
 	dep := d.depRepo.Get(c, d.DB, r.ID)
-
+	response := UpdateResponse{}
 	if dep != nil {
 
 		if d.checkNewPIDIsChildID(c, r.ID, r.PID) {
@@ -335,10 +337,9 @@ func (d *department) Update(c context.Context, r *UpdateRequest) (*UpdateRespons
 			}
 			tx.Commit()
 			users := d.findChangeUsers(c, r.ID)
-			d.search.PushUser(c, nil, users...)
+			response.Users = append(response.Users, users...)
 		}
 
-		d.search.PushDep(c, nil)
 		return nil, nil
 	}
 	return nil, error2.New(code.InvalidUpdate)
@@ -616,7 +617,6 @@ func (d *department) Delete(c context.Context, r *DelOneRequest) (*DelOneRespons
 		return nil, err
 	}
 	tx.Commit()
-	d.search.PushDep(c, nil)
 	return nil, nil
 }
 

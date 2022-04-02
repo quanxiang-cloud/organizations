@@ -45,6 +45,8 @@ type OthServer interface {
 	GetAllUsers(c context.Context, r *UserAllRequest) (res *UserAllResp, err error)
 	GetAllDeps(c context.Context, r *DepAllRequest) (res *DepAllDepsResp, err error)
 	OtherGetUsersByDepID(c context.Context, r *GetUsersByDepIDRequest) (res *GetUsersByDepIDResponse, err error)
+	PushUserToSearch(c context.Context)
+	PushDepToSearch(c context.Context)
 }
 
 // othersServer
@@ -139,11 +141,10 @@ func (u *othersServer) AddUsers(c context.Context, r *AddUsersRequest) (res *Add
 	}
 	res = &AddListResponse{}
 	res.Result = result
-	u.pushUserToSearch(c)
 	return res, nil
 }
 
-func (u *othersServer) pushUserToSearch(c context.Context) {
+func (u *othersServer) PushUserToSearch(c context.Context) {
 	var index = 1
 	var size = 300
 	for {
@@ -201,7 +202,7 @@ func (u *othersServer) AddDepartments(c context.Context, r *AddDepartmentRequest
 	return res, nil
 }
 
-func (u *othersServer) pushDepToSearch(c context.Context) {
+func (u *othersServer) PushDepToSearch(c context.Context) {
 	u.search.PushDep(c, nil)
 }
 

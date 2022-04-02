@@ -38,6 +38,7 @@ type UserAPI struct {
 	log         logger.AdaptedLogger
 	conf        configs.Config
 	redisClient redis.UniversalClient
+	search      user.Search
 }
 
 // NewUserAPI new
@@ -71,6 +72,8 @@ func (u *UserAPI) Add(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	//push data to search
+	u.search.PushUser(c, nil, res.Users...)
 	resp.Format(res, nil).Context(c)
 	return
 }
@@ -88,6 +91,12 @@ func (u *UserAPI) Update(c *gin.Context) {
 	if err != nil {
 		resp.Format(nil, err).Context(c)
 		return
+	}
+	if res.UpdateUser != nil {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.UpdateUser)
+	}
+	if len(res.Users) > 0 {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
 	}
 	resp.Format(res, nil).Context(c)
 	return
@@ -107,6 +116,7 @@ func (u *UserAPI) UpdateAvatar(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	u.search.PushUser(ginheader.MutateContext(c), nil, res.UpdateUser)
 	resp.Format(res, nil).Context(c)
 	return
 }
@@ -134,6 +144,9 @@ func (u *UserAPI) UpdateStatus(c *gin.Context) {
 		return
 	}
 	res, err := u.user.UpdateUserStatus(ginheader.MutateContext(c), r)
+	if res.User != nil {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.User)
+	}
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -149,6 +162,9 @@ func (u *UserAPI) UpdateUsersStatus(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r.UpdatedBy = profile.UserID
 	res, err := u.user.UpdateUsersStatus(ginheader.MutateContext(c), r)
+	if err == nil && len(res.Users) > 0 {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	}
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -218,6 +234,9 @@ func (u *UserAPI) AdminChangeUsersDEP(c *gin.Context) {
 		return
 	}
 	res, err := u.user.AdminChangeUsersDEP(ginheader.MutateContext(c), r)
+	if err == nil && len(res.Users) > 0 {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	}
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -249,6 +268,7 @@ func (u *UserAPI) OtherServerAddUser(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r.Profile = profile
 	res, err := u.other.AddUsers(ginheader.MutateContext(c), r)
+	u.other.PushUserToSearch(ginheader.MutateContext(c))
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -264,6 +284,7 @@ func (u *UserAPI) OtherServerAddDepartment(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r.Profile = profile
 	res, err := u.other.AddDepartments(ginheader.MutateContext(c), r)
+	u.other.PushDepToSearch(ginheader.MutateContext(c))
 	resp.Format(res, err).Context(c)
 	return
 }
