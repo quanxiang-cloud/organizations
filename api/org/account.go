@@ -23,7 +23,6 @@ import (
 	ginheader "github.com/quanxiang-cloud/cabin/tailormade/header"
 	"github.com/quanxiang-cloud/cabin/tailormade/resp"
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/account"
-	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
 	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	"github.com/quanxiang-cloud/organizations/pkg/header2"
@@ -93,7 +92,6 @@ func (a *Account) UserResetPassword(c *gin.Context) {
 	}
 	profile := header2.GetProfile(c)
 	r.UserID = profile.UserID
-	r.Password = user.CreatePassword(ginheader.MutateContext(c), a.conf, a.redisClient)
 	userAccount, err := a.account.UpdatePassword(ginheader.MutateContext(c), r)
 	resp.Format(userAccount, err).Context(c)
 	return

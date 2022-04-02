@@ -121,7 +121,7 @@ func (u *account) UpdatePassword(c context.Context, r *UpdatePasswordRequest) (*
 		tx := u.DB.Begin()
 		u2 := org.Account{
 			UserID:   accounts[0].UserID,
-			Password: encode2.MD5Encode(r.Password),
+			Password: encode2.MD5Encode(r.NewPassword),
 		}
 		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
 		if err != nil {
@@ -184,7 +184,7 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 		m[r.UserIDs[k]] = newPWD
 
 		res := u.user.Get(c, u.DB, r.UserIDs[k])
-		if r.SendMessage[k].SendChannel != user.NO {
+		if r.SendMessage != nil && r.SendMessage[k].SendChannel != user.NO {
 			user.SendAccountAndPWDOrCode(c, u.message, send[res.ID].SendTo, "", u.conf.MessageTemplate.ResetPWD, newPWD, r.SendMessage[k].SendChannel)
 		}
 		response := ResetPasswordResponse{}
