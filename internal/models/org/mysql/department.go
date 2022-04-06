@@ -49,14 +49,22 @@ func (d *departmentRepo) Update(ctx context.Context, tx *gorm.DB, req *org.Depar
 
 func (d *departmentRepo) Delete(ctx context.Context, tx *gorm.DB, id ...string) (err error) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	err = tx.Where("tenant_id=? and id in (?)", tenantID, id).Delete(&org.Department{}).Error
+	if tenantID == "" {
+		tx = tx.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		tx = tx.Where("tenant_id=?", tenantID)
+	}
+	err = tx.Where("id in(?)", id).Delete(&org.Department{}).Error
 	return err
 }
 
 func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (list []org.Department) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
-
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	db = db.Where("id in (?)", id)
 
 	db = db.Order("updated_at desc")
@@ -71,7 +79,11 @@ func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (l
 
 func (d *departmentRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int) (list []org.Department, total int64) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
@@ -105,7 +117,11 @@ func (d *departmentRepo) SelectByPID(ctx context.Context, db *gorm.DB, pid strin
 	departments := make([]org.Department, 0)
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	db = db.Where("pid=?", pid)
 	if status != 0 {
 		db = db.Where("use_status=?", status)
@@ -122,11 +138,35 @@ func (d *departmentRepo) SelectByPID(ctx context.Context, db *gorm.DB, pid strin
 	return nil, 0
 }
 
-func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, superPID, name string) (one *org.Department) {
+func (d *departmentRepo) SelectByPIDs(ctx context.Context, db *gorm.DB, status int, pid ...string) (list []org.Department) {
+	departments := make([]org.Department, 0)
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
+	db = db.Where("pid in (?)", pid)
+	if status != 0 {
+		db = db.Where("use_status=?", status)
+	}
+
+	affected := db.Find(&departments).RowsAffected
+	if affected > 0 {
+		return departments
+	}
+	return nil
+}
+
+func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, pid, name string) (one *org.Department) {
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
-	db = db.Where("pid=? and name=? and use_status=1", superPID, name)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
+	db = db.Where("pid=? and name=? and use_status=1", pid, name)
 	affected := db.Find(&res).RowsAffected
 	if affected > 0 {
 		return &res
@@ -137,7 +177,11 @@ func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, su
 func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Department {
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	db = db.Where("(pid='' or pid is null) and use_status=1")
 	affected := db.Find(&res).RowsAffected
 	if affected == 1 {
@@ -148,7 +192,11 @@ func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Dep
 
 func (d *departmentRepo) Count(ctx context.Context, db *gorm.DB, status int) (total int64) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
@@ -159,8 +207,11 @@ func (d *departmentRepo) Count(ctx context.Context, db *gorm.DB, status int) (to
 
 func (d *departmentRepo) GetMaxGrade(ctx context.Context, db *gorm.DB) int64 {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
-
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	db = db.Select("max(grade) as grade")
 
 	var num int64

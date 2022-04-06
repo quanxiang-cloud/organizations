@@ -82,7 +82,7 @@ func (u *accountRepo) Update(tx *gorm.DB, res *org.Account) error {
 }
 
 func (u *accountRepo) UpdatePasswordByUserID(tx *gorm.DB, res *org.Account) error {
-	err := tx.Model(res).Where("user_id=?", res.UserID).Update("password", res.Password).Error
+	err := tx.Table(res.TableName()).Where("user_id=?", res.UserID).Update("password", res.Password).Error
 	if err != nil {
 		return err
 	}

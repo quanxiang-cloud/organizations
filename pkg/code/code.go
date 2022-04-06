@@ -81,20 +81,22 @@ const (
 	DataNotExist = 50034000030
 	// CanNotModifyYourself can not modify self
 	CanNotModifyYourself = 50034000031
-	//NotExistAccountErr account not exist
+	// NotExistAccountErr account not exist
 	NotExistAccountErr = 50034000032
-	//ExpireVerificationCode code was expired
+	// ExpireVerificationCode code was expired
 	ExpireVerificationCode = 50034000033
-	//ErrTooLong too long
+	// ErrTooLong too long
 	ErrTooLong = 50034000034
-	//ErrInvalidRuleAccount not match account rule
+	// ErrInvalidRuleAccount not match account rule
 	ErrInvalidRuleAccount = 50034000035
-	//ErrFirstResetInvalid first reset invalid
+	// ErrFirstResetInvalid first reset invalid
 	ErrFirstResetInvalid = 50034000036
-	//ErrHasBeActive some data is active
+	// ErrHasBeActive some data is active
 	ErrHasBeActive = 50034000037
-	//ErrFieldColumnUsed alias column is open
+	// ErrFieldColumnUsed alias column is open
 	ErrFieldColumnUsed = 50034000038
+	// ErrCircleData make a circle data
+	ErrCircleData = 50034000039
 )
 
 // CodeTable 码表
@@ -103,7 +105,7 @@ var CodeTable = error2.Table{
 	InvalidParams:           "无效或错误参数.",
 	InvalidTimestamp:        "无效的时间格式.",
 	NameUsed:                "名称已被使用！请检查后重试！",
-	InvalidDELDEP:           "当前部门下还存在关联用户，不能进行删除！",
+	InvalidDELDEP:           "当前部门下还存在关联用户或子部门，不能进操作！",
 	InvalidFile:             "无效的文件.",
 	AccountPasswordCountErr: "账号或密码(验证码)错误，请检查后重试！你还有%d次尝试机会！",
 	InvalidAccount:          "账号不存在或已被禁用，请检查后重试！",
@@ -137,4 +139,5 @@ var CodeTable = error2.Table{
 	ErrFirstResetInvalid:    "首次重置密码已完成！",
 	ErrHasBeActive:          "数据中包含已被激活数据，请选择正确数据再操作！",
 	ErrFieldColumnUsed:      "扩展字段功能已被开启，请不要重复操作！",
+	ErrCircleData:           "数据关系成环，请检查后提交！",
 }

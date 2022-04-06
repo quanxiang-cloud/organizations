@@ -14,11 +14,13 @@ limitations under the License.
 */
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/organizations/internal/models/org"
+	mysql2 "github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
 	"github.com/quanxiang-cloud/organizations/pkg/es"
 	"github.com/quanxiang-cloud/search/pkg/apis/v1alpha1"
 )
@@ -41,24 +43,26 @@ type Search struct {
 type SearchUser struct {
 	User []*org.User
 	Ctx  context.Context
+	Sig  chan int
 }
 
 // SearchDepartment push data
 type SearchDepartment struct {
 	Ctx context.Context
+	Sig chan int
 }
 
 // NewSearch new
-func NewSearch(db *gorm.DB, userRepo org.UserRepo, userLeaderRepo org.UserLeaderRelationRepo, userDepRepo org.UserDepartmentRelationRepo, depRepo org.DepartmentRepo) {
+func NewSearch(db *gorm.DB) {
 	search = &Search{
 		ctx:            context.Background(),
 		db:             db,
-		userRepo:       userRepo,
-		userDepRepo:    userDepRepo,
-		userLeaderRepo: userLeaderRepo,
-		depRepo:        depRepo,
-		user:           make(chan *SearchUser, 1),
-		dep:            make(chan *SearchDepartment, 1),
+		userRepo:       mysql2.NewUserRepo(),
+		userDepRepo:    mysql2.NewUserDepartmentRelationRepo(),
+		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
+		depRepo:        mysql2.NewDepartmentRepo(),
+		user:           make(chan *SearchUser),
+		dep:            make(chan *SearchDepartment),
 	}
 	go search.process(search.ctx)
 
@@ -86,9 +90,12 @@ func (s *Search) process(ctx context.Context) {
 }
 
 // PushUser push data
-func (s *Search) PushUser(ctx context.Context, user ...*org.User) {
+func (s *Search) PushUser(ctx context.Context, sig chan int, user ...*org.User) {
 	if len(user) > 0 {
 		u := new(SearchUser)
+		if sig != nil {
+			u.Sig = sig
+		}
 		u.User = append(u.User, user...)
 		u.Ctx = ctx
 		s.user <- u
@@ -96,9 +103,12 @@ func (s *Search) PushUser(ctx context.Context, user ...*org.User) {
 }
 
 // PushDep push data
-func (s *Search) PushDep(ctx context.Context) {
+func (s *Search) PushDep(ctx context.Context, sig chan int) {
 	d := new(SearchDepartment)
 	d.Ctx = ctx
+	if sig != nil {
+		d.Sig = sig
+	}
 
 	s.dep <- d
 
@@ -118,6 +128,9 @@ func (s *Search) pushDepToSearch(dep *SearchDepartment) {
 			departments.Deps = append(departments.Deps, department)
 		}
 		search := es.GetSearch()
+		if dep.Sig != nil {
+			departments.Sig = dep.Sig
+		}
 		search.AddDepartmentSearch(departments)
 	}
 }
@@ -131,8 +144,9 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 	for k := range allDeps {
 		depMap[allDeps[k].ID] = &allDeps[k]
 	}
+	esData := new(es.SearchUser)
 	for _, v := range user.User {
-		esData := new(es.SearchUser)
+
 		eu := new(v1alpha1.User)
 		esData.Ctx = user.Ctx
 		eu.ID = v.ID
@@ -168,12 +182,17 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 			}
 		}
 		//寻找leader，从当前到顶层
-		leaderToTop := s.getLeaderToTop(user.Ctx, v.ID)
-		eu.Leaders = append(eu.Leaders, leaderToTop...)
-		esData.User = eu
-		search.AddUserSearch(esData)
+		leaderToTop, err := s.getLeaderToTop(user.Ctx, v.ID, v.ID)
+		if err == nil && leaderToTop != nil {
+			eu.Leaders = append(eu.Leaders, leaderToTop...)
+		}
+		esData.User = append(esData.User, *eu)
 
 	}
+	if user.Sig != nil {
+		esData.Sig = user.Sig
+	}
+	search.AddUserSearch(esData)
 
 }
 
@@ -193,11 +212,14 @@ func (s *Search) getDepToTop(depPID string, deps []v1alpha1.Department, depMap m
 	return deps
 }
 
-func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1.Leader {
+func (s *Search) getLeaderToTop(ctx context.Context, userID, startUserID string) ([][]v1alpha1.Leader, error) {
 	relations := s.userLeaderRepo.SelectByUserIDs(s.db, userID)
 	if len(relations) > 0 {
 		res := make([][]v1alpha1.Leader, 0)
 		for k := range relations {
+			if relations[k].LeaderID == startUserID {
+				return nil, errors.New("circle leader")
+			}
 			if relations[k].LeaderID != "" {
 				ls := make([]v1alpha1.Leader, 0)
 				get := s.userRepo.Get(ctx, s.db, relations[k].LeaderID)
@@ -207,7 +229,10 @@ func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1
 					leader.Name = get.Name
 					leader.Attr = relations[k].Attr
 					ls = append(ls, leader)
-					array := s.getLeaderToTop(ctx, get.ID)
+					array, err := s.getLeaderToTop(ctx, get.ID, startUserID)
+					if err != nil {
+						return nil, err
+					}
 					if array != nil {
 						for k1 := range array {
 							ll := append(ls, array[k1]...)
@@ -220,9 +245,9 @@ func (s *Search) getLeaderToTop(ctx context.Context, userID string) [][]v1alpha1
 			}
 
 		}
-		return res
+		return res, nil
 
 	}
-	return nil
+	return nil, nil
 
 }

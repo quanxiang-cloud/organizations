@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -74,12 +75,11 @@ type user struct {
 	columnRepo     org.UserTableColumnsRepo
 	userTenantRepo org.UserTenantRelationRepo
 	landlord       landlord.Landlord
-	search         *Search
 }
 
 //NewUser new
 func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) User {
-	NewSearch(db, mysql2.NewUserRepo(), mysql2.NewUserLeaderRelationRepo(), mysql2.NewUserDepartmentRelationRepo(), mysql2.NewDepartmentRepo())
+
 	return &user{
 		userRepo:       mysql2.NewUserRepo(),
 		userDepRepo:    mysql2.NewUserDepartmentRelationRepo(),
@@ -96,7 +96,6 @@ func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient
 		columnRepo:     mysql2.NewUserTableColumnsRepo(),
 		userTenantRepo: mysql2.NewUserTenantRelationRepo(),
 		landlord:       landlord.NewLandlord(conf.InternalNet),
-		search:         GetSearch(),
 	}
 }
 
@@ -163,8 +162,9 @@ type SendMessage struct {
 
 // AddUserResponse admin user response
 type AddUserResponse struct {
-	ID       string `json:"id"`
-	Password string `json:"password,omitempty"`
+	ID       string      `json:"id"`
+	Password string      `json:"password,omitempty"`
+	Users    []*org.User `json:"-"`
 }
 
 // Add  add user
@@ -296,8 +296,7 @@ func (u *user) Add(c context.Context, r *AddUserRequest) (res *AddUserResponse, 
 		m[id] = r.Password
 		SendAccountAndPWDOrCode(c, u.message, "", r.SendMessage.SendTo, u.conf.MessageTemplate.NewPWD, r.Password, r.SendMessage.SendChannel)
 	}
-	//push data to search
-	u.search.PushUser(c, addData)
+	adminUser.Users = append(adminUser.Users, addData)
 	return &adminUser, err
 }
 
@@ -325,7 +324,9 @@ type UpdateUserRequest struct {
 
 // UpdateUserResponse update response
 type UpdateUserResponse struct {
-	ID string `json:"id"`
+	ID         string      `json:"id"`
+	UpdateUser *org.User   `json:"-"`
+	Users      []*org.User `json:"-"`
 }
 
 // Update update base info
@@ -406,20 +407,26 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 			}
 		}
 	}
+
 	if len(r.Leader) > 0 {
+
 		err = u.userLeaderRepo.DeleteByUserIDs(tx, r.ID)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
 		for _, v := range r.Leader {
+			err = checkLeader(c, u, v.UserID, r.ID)
+			if err != nil {
+				return nil, error2.New(code.ErrCircleData)
+			}
 			relation := org.UserLeaderRelation{
 				ID:       id2.ShortID(0),
 				UserID:   r.ID,
 				LeaderID: v.UserID,
 				Attr:     v.Attr,
 			}
-			err := u.userLeaderRepo.Add(tx, &relation)
+			err = u.userLeaderRepo.Add(tx, &relation)
 			if err != nil {
 				tx.Rollback()
 				return nil, err
@@ -427,8 +434,43 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		}
 	}
 	tx.Commit()
-	u.search.PushUser(c, updateData)
-	return &UpdateUserResponse{ID: r.ID}, nil
+	response := &UpdateUserResponse{ID: r.ID}
+	response.UpdateUser = updateData
+
+	if len(r.Leader) > 0 {
+		users := findChild(c, u, r.ID)
+		if len(users) > 0 {
+			response.Users = append(response.Users, users...)
+		}
+	}
+	return response, nil
+}
+func findChild(c context.Context, u *user, leaderID ...string) []*org.User {
+	userIDs := getChildUser(c, u, leaderID...)
+	userIDMap := make(map[string]string)
+	for k := range userIDs {
+		userIDMap[userIDs[k]] = userIDs[k]
+	}
+	ids := make([]string, 0)
+	for _, v := range userIDMap {
+		ids = append(ids, v)
+	}
+	if len(ids) > 0 {
+		return u.userRepo.List(c, u.DB, ids...)
+	}
+	return nil
+}
+
+func getChildUser(c context.Context, u *user, leaderID ...string) []string {
+	leaderRelations := u.userLeaderRepo.SelectByLeaderID(u.DB, leaderID...)
+	ids := make([]string, 0)
+	for k := range leaderRelations {
+		ids = append(ids, leaderRelations[k].UserID)
+	}
+	if len(ids) > 0 {
+		ids = append(ids, getChildUser(c, u, ids...)...)
+	}
+	return ids
 }
 
 // UpdateUserAvatarRequest update avatar request
@@ -440,9 +482,10 @@ type UpdateUserAvatarRequest struct {
 
 // UpdateUserAvatarResponse update avatar response
 type UpdateUserAvatarResponse struct {
-	ID       string `json:"id" binding:"required,max=64"`
-	Avatar   string `json:"avatar"`
-	UpdateBy string `json:"-"`
+	ID         string    `json:"id" binding:"required,max=64"`
+	Avatar     string    `json:"avatar"`
+	UpdateBy   string    `json:"-"`
+	UpdateUser *org.User `json:"-"`
 }
 
 // UpdateAvatar update avatar
@@ -462,8 +505,9 @@ func (u *user) UpdateAvatar(c context.Context, r *UpdateUserAvatarRequest) (*Upd
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, old)
-	return &UpdateUserAvatarResponse{}, nil
+	response := &UpdateUserAvatarResponse{}
+	response.UpdateUser = old
+	return response, nil
 }
 
 // SearchListUserRequest 查询集合条件请求体
@@ -559,7 +603,15 @@ func (u *user) getUsersPageList(c context.Context, r *SearchListUserRequest) ([]
 			}
 		}
 	}
-	list, total := u.userRepo.PageList(c, u.DB, consts.NormalStatus, r.Page, r.Limit, depIDs)
+	var userIDs = make([]string, 0)
+	if len(depIDs) > 0 {
+		relations := u.userDepRepo.SelectByDEPID(u.DB, depIDs...)
+		for k := range relations {
+			userIDs = append(userIDs, relations[k].UserID)
+		}
+	}
+
+	list, total := u.userRepo.PageList(c, u.DB, consts.NormalStatus, r.Page, r.Limit, userIDs)
 
 	return list, total
 }
@@ -643,8 +695,11 @@ func (u *user) AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*Sea
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		resUser.Leader = append(resUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			resUser.Leader = append(resUser.Leader, leader...)
+		}
+
 		return &resUser, nil
 	}
 	return nil, nil
@@ -721,8 +776,10 @@ func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) 
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		resUser.Leader = append(resUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			resUser.Leader = append(resUser.Leader, leader...)
+		}
 		return &resUser, nil
 	}
 	return nil, error2.New(code.DataNotExist)
@@ -796,6 +853,7 @@ type StatusRequest struct {
 
 //StatusResponse response
 type StatusResponse struct {
+	User *org.User `json:"-"`
 }
 
 // UpdateUserStatus update one user status
@@ -847,8 +905,8 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 		return nil, err
 	}
 	tx.Commit()
-	u.search.PushUser(c, old)
-	return &StatusResponse{}, nil
+
+	return &StatusResponse{User: old}, nil
 }
 
 //ListStatusRequest update list user status request
@@ -861,6 +919,7 @@ type ListStatusRequest struct {
 
 //ListStatusResponse update list user status response
 type ListStatusResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 //UpdateUsersStatus update list user status
@@ -916,8 +975,9 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 		users = append(users, old)
 
 	}
+	response := &ListStatusResponse{}
 	if len(users) > 0 {
-		u.search.PushUser(c, users...)
+		response.Users = append(response.Users, users...)
 	}
 	go func() {
 		if r.UseStatus == consts.ActiveStatus {
@@ -929,7 +989,7 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 		}
 	}()
 
-	return nil, nil
+	return response, nil
 }
 
 // ChangeUsersDEPRequest change user dep request
@@ -941,6 +1001,7 @@ type ChangeUsersDEPRequest struct {
 
 // ChangeUsersDEPResponse change user dep response
 type ChangeUsersDEPResponse struct {
+	Users []*org.User `json:"-"`
 }
 
 // AdminChangeUsersDEP change list user dep
@@ -961,8 +1022,11 @@ func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest)
 	}
 	tx.Commit()
 	users := u.userRepo.List(c, u.DB, rq.UsersID...)
-	u.search.PushUser(c, users...)
-	return nil, nil
+	response := &ChangeUsersDEPResponse{}
+	if len(users) > 0 {
+		response.Users = append(response.Users, users...)
+	}
+	return response, nil
 }
 
 func (u *user) getChildDep(c context.Context, depID string, depIDs []string, status int) []string {
@@ -1064,8 +1128,11 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 			}
 
 		}
-		leader := makeLeaderToTop(c, u, old.ID)
-		userUser.Leader = append(userUser.Leader, leader...)
+		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		if err == nil && leader != nil {
+			userUser.Leader = append(userUser.Leader, leader...)
+		}
+
 		marshal, err := json.Marshal(userUser)
 		if err != nil {
 			return nil, err
@@ -1076,30 +1143,59 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 	return nil, error2.New(code.DataNotExist)
 }
 
-func makeLeaderToTop(c context.Context, u *user, userID string) [][]Leader {
+func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([][]Leader, error) {
 	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
 	if len(relations) > 0 {
 		res := make([][]Leader, 0)
 		for k := range relations {
-			ls := make([]Leader, 0)
-			get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
-			leader := Leader{}
-			leader.ID = get.ID
-			leader.Name = get.Name
-			leader.Email = get.Email
-			ls = append(ls, leader)
-			array := makeLeaderToTop(c, u, get.ID)
-			if array != nil {
-				for k1 := range array {
-					ll := append(ls, array[k1]...)
-					res = append(res, ll)
-				}
-				continue
+			if relations[k].LeaderID == startUserID {
+				return nil, errors.New("circle leader")
 			}
-			res = append(res, ls)
+			if relations[k].LeaderID != "" {
+				ls := make([]Leader, 0)
+				get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
+				leader := Leader{}
+				leader.ID = get.ID
+				leader.Name = get.Name
+				leader.Email = get.Email
+				ls = append(ls, leader)
+				array, err := makeLeaderToTop(c, u, get.ID, startUserID)
+				if err != nil {
+					return nil, err
+				}
+				if array != nil {
+					for k1 := range array {
+						ll := append(ls, array[k1]...)
+						res = append(res, ll)
+					}
+					continue
+				}
+				res = append(res, ls)
+			}
 
 		}
-		return res
+		return res, nil
+	}
+	return nil, nil
+
+}
+
+func checkLeader(c context.Context, u *user, userID, startUserID string) error {
+	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
+	if len(relations) > 0 {
+		for k := range relations {
+			if relations[k].LeaderID == startUserID {
+				return errors.New("circle leader")
+			}
+			if relations[k].LeaderID != "" {
+				err := checkLeader(c, u, relations[k].LeaderID, startUserID)
+				if err != nil {
+					return err
+				}
+			}
+
+		}
+		return nil
 	}
 	return nil
 
@@ -1243,6 +1339,7 @@ type RegisterRequest struct {
 
 // RegisterResponse register response
 type RegisterResponse struct {
+	User *org.User `json:"-"`
 }
 
 // Register register
@@ -1319,7 +1416,8 @@ func (u *user) Register(c context.Context, r *RegisterRequest) (*RegisterRespons
 	}
 
 	tx.Commit()
-	return nil, nil
+
+	return &RegisterResponse{User: addData}, nil
 }
 
 // CreatePassword create password

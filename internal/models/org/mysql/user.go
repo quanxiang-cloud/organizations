@@ -55,15 +55,19 @@ func (u *userRepo) UpdateByID(ctx context.Context, tx *gorm.DB, r *org.User) (er
 	return err
 }
 
-func (u *userRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int, depIDs []string) (list []*org.User, total int64) {
-	if len(depIDs) > 0 {
-		db = db.Where("id in (select user_id from org_user_department_relation where dep_id in (?))", depIDs)
+func (u *userRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int, userIDs []string) (list []*org.User, total int64) {
+	if len(userIDs) > 0 {
+		db = db.Where("id in (?)", userIDs)
 	}
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	db = db.Order("updated_at desc")
 	users := make([]*org.User, 0)
 	var num int64
@@ -92,7 +96,12 @@ func (u *userRepo) Get(ctx context.Context, db *gorm.DB, id string) (res *org.Us
 func (u *userRepo) List(ctx context.Context, db *gorm.DB, id ...string) (res []*org.User) {
 	users := make([]*org.User, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	affected := db.Model(&org.User{}).Where("id in (?)", id).Find(&users).RowsAffected
 	if affected > 0 {
 		return users
@@ -103,7 +112,11 @@ func (u *userRepo) List(ctx context.Context, db *gorm.DB, id ...string) (res []*
 func (u *userRepo) SelectByEmailOrPhone(ctx context.Context, db *gorm.DB, info string) (res *org.User) {
 	user := org.User{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	affected := db.Model(&org.User{}).Where("email=? or phone=?", info, info).Find(&user).RowsAffected
 	if affected == 1 {
 		return &user
@@ -140,7 +153,11 @@ func (u *userRepo) Count(ctx context.Context, db *gorm.DB, status, activeStatus 
 	var num1 int64
 	var num2 int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db.Model(&org.User{}).Where("use_status=?", status).Count(&num1)
 	}

@@ -25,7 +25,14 @@ type useColumnsRepo struct {
 
 func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.UseColumns) (err error) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	err = tx.Exec("delete from org_use_columns where tenant_id=?", tenantID).Error
+	sql := ""
+	if tenantID == "" {
+		sql = sql + "delete from org_use_columns where tenant_id is null"
+	} else {
+		sql = sql + "delete from org_use_columns where tenant_id='" + tenantID + "'"
+	}
+
+	err = tx.Exec(sql).Error
 	if len(reqs) > 0 {
 		for k := range reqs {
 			err = tx.Create(&reqs[k]).Error
@@ -41,7 +48,11 @@ func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.Use
 func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int) (res []org.UseColumns) {
 	data := make([]org.UseColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db = db.Where("viewer_status=?", status)
 	}

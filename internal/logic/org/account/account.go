@@ -120,10 +120,10 @@ func (u *account) UpdatePassword(c context.Context, r *UpdatePasswordRequest) (*
 		}
 		tx := u.DB.Begin()
 		u2 := org.Account{
-			ID:       accounts[0].ID,
-			Password: encode2.MD5Encode(r.Password),
+			UserID:   accounts[0].UserID,
+			Password: encode2.MD5Encode(r.NewPassword),
 		}
-		err := u.accountRepo.Update(tx, &u2)
+		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
@@ -172,10 +172,10 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 	for k := range r.UserIDs {
 		newPWD := user.CreatePassword(c, u.conf, u.redisClient)
 		u2 := org.Account{
-			ID:       r.UserIDs[k],
+			UserID:   r.UserIDs[k],
 			Password: encode2.MD5Encode(newPWD),
 		}
-		err := u.accountRepo.Update(tx, &u2)
+		err := u.accountRepo.UpdatePasswordByUserID(tx, &u2)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
@@ -184,7 +184,7 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 		m[r.UserIDs[k]] = newPWD
 
 		res := u.user.Get(c, u.DB, r.UserIDs[k])
-		if r.SendMessage[k].SendChannel != user.NO {
+		if r.SendMessage != nil && r.SendMessage[k].SendChannel != user.NO {
 			user.SendAccountAndPWDOrCode(c, u.message, send[res.ID].SendTo, "", u.conf.MessageTemplate.ResetPWD, newPWD, r.SendMessage[k].SendChannel)
 		}
 		response := ResetPasswordResponse{}
@@ -505,9 +505,13 @@ func (u *account) FirstUpdatePassword(c context.Context, r *FirstSetPasswordRequ
 		UserID:   r.UserID,
 		Password: encode2.MD5Encode(r.NewPassword),
 	}
-	u.accountRepo.UpdatePasswordByUserID(tx, u2)
+	err := u.accountRepo.UpdatePasswordByUserID(tx, u2)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
 	oldUser.PasswordStatus = oldUser.PasswordStatus + 1
-	err := u.user.UpdateByID(c, tx, oldUser)
+	err = u.user.UpdateByID(c, tx, oldUser)
 	if err != nil {
 		tx.Rollback()
 		return nil, err

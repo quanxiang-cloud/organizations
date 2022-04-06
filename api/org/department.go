@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
 	"gorm.io/gorm"
 	"net/http"
 
@@ -33,17 +34,19 @@ import (
 
 // Department api
 type Department struct {
-	dep   department.Department
-	other other.OthServer
-	log   logger.AdaptedLogger
+	dep    department.Department
+	other  other.OthServer
+	log    logger.AdaptedLogger
+	search *user.Search
 }
 
 // NewDepartmentAPI new
 func NewDepartmentAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger) Department {
 	return Department{
-		dep:   department.NewDepartment(db),
-		other: other.NewOtherServer(conf, db, redisClient),
-		log:   log,
+		dep:    department.NewDepartment(db),
+		other:  other.NewOtherServer(conf, db, redisClient),
+		log:    log,
+		search: user.GetSearch(),
 	}
 }
 
@@ -63,6 +66,7 @@ func (d *Department) AddDep(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	d.search.PushDep(ginheader.MutateContext(c), nil)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -82,6 +86,8 @@ func (d *Department) UpdateDep(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	d.search.PushDep(ginheader.MutateContext(c), nil)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -185,6 +191,7 @@ func (d *Department) DeleteDepByID(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	d.search.PushDep(ginheader.MutateContext(c), nil)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -230,6 +237,9 @@ func (d *Department) SetDEPLeader(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
+	if len(res.Users) > 0 {
+		d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	}
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -247,6 +257,9 @@ func (d *Department) CancelDEPLeader(c *gin.Context) {
 	if err != nil {
 		resp.Format(nil, err).Context(c)
 		return
+	}
+	if len(res.Users) > 0 {
+		d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
 	}
 	resp.Format(res, err).Context(c)
 	return

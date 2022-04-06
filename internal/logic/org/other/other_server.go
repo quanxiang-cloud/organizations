@@ -45,6 +45,8 @@ type OthServer interface {
 	GetAllUsers(c context.Context, r *UserAllRequest) (res *UserAllResp, err error)
 	GetAllDeps(c context.Context, r *DepAllRequest) (res *DepAllDepsResp, err error)
 	OtherGetUsersByDepID(c context.Context, r *GetUsersByDepIDRequest) (res *GetUsersByDepIDResponse, err error)
+	PushUserToSearch(c context.Context)
+	PushDepToSearch(c context.Context)
 }
 
 // othersServer
@@ -60,6 +62,7 @@ type othersServer struct {
 	ldap           ldap.Ldap
 	conf           configs.Config
 	userLeaderRepo org.UserLeaderRelationRepo
+	search         *user.Search
 }
 
 // NewOtherServer 实例
@@ -76,6 +79,7 @@ func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.Universa
 		ldap:           ldap.NewLdap(conf.InternalNet),
 		conf:           conf,
 		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
+		search:         user.GetSearch(),
 	}
 }
 
@@ -140,6 +144,20 @@ func (u *othersServer) AddUsers(c context.Context, r *AddUsersRequest) (res *Add
 	return res, nil
 }
 
+func (u *othersServer) PushUserToSearch(c context.Context) {
+	var index = 1
+	var size = 300
+	for {
+		list, _ := u.userRepo.PageList(c, u.DB, 0, index, size, nil)
+		if len(list) > 0 {
+			u.search.PushUser(c, nil, list...)
+			index++
+			continue
+		}
+		break
+	}
+}
+
 // AddDepartmentRequest other server add  department to org request
 type AddDepartmentRequest struct {
 	Deps []AddDep `json:"deps"`
@@ -182,6 +200,10 @@ func (u *othersServer) AddDepartments(c context.Context, r *AddDepartmentRequest
 	res = &AddListResponse{}
 	res.Result = result
 	return res, nil
+}
+
+func (u *othersServer) PushDepToSearch(c context.Context) {
+	u.search.PushDep(c, nil)
 }
 
 //GetUserByIDsRequest get user by ids request
@@ -803,14 +825,17 @@ func GetUserLeader(c context.Context, userRepo org.UserRepo, userLeaderRepo org.
 		for k1 := range ud[users[k].ID] {
 			leaders := make([]user.Leader, 0)
 			leader := user.Leader{}
-			leader.ID = leaderMap[ud[users[k].ID][k1]].ID
-			leader.Name = leaderMap[ud[users[k].ID][k1]].Name
-			leader.Email = leaderMap[ud[users[k].ID][k1]].Email
-			leader.Phone = leaderMap[ud[users[k].ID][k1]].Phone
-			leader.UseStatus = leaderMap[ud[users[k].ID][k1]].UseStatus
-			leader.Position = leaderMap[ud[users[k].ID][k1]].Position
-			leaders = append(leaders, leader)
-			resp.Leader = append(resp.Leader, leaders)
+			if v, ok := leaderMap[ud[users[k].ID][k1]]; ok && v != nil {
+				leader.ID = leaderMap[ud[users[k].ID][k1]].ID
+				leader.Name = leaderMap[ud[users[k].ID][k1]].Name
+				leader.Email = leaderMap[ud[users[k].ID][k1]].Email
+				leader.Phone = leaderMap[ud[users[k].ID][k1]].Phone
+				leader.UseStatus = leaderMap[ud[users[k].ID][k1]].UseStatus
+				leader.Position = leaderMap[ud[users[k].ID][k1]].Position
+				leaders = append(leaders, leader)
+				resp.Leader = append(resp.Leader, leaders)
+			}
+
 		}
 		responses = append(responses, resp)
 	}

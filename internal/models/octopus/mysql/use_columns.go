@@ -26,7 +26,12 @@ type useColumnsRepo struct {
 func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []octopus.UseColumns) (err error) {
 	columns := octopus.UseColumns{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	err = tx.Exec("delete from "+columns.TableName()+" where tenant_id=?", tenantID).Error
+	if tenantID == "" {
+		tx = tx.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		tx = tx.Where("tenant_id=?", tenantID)
+	}
+	err = tx.Table(columns.TableName()).Delete(columns).Error
 	if len(reqs) > 0 {
 		for k := range reqs {
 			reqs[k].TenantID = tenantID
@@ -43,7 +48,11 @@ func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []octopus
 func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int) (res []octopus.UseColumns) {
 	data := make([]octopus.UseColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	db = db.Where("tenant_id=?", tenantID)
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
 	if status != 0 {
 		db = db.Where("viewer_status=?", status)
 	}

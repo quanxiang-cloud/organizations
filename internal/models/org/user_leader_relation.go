@@ -33,6 +33,6 @@ type UserLeaderRelationRepo interface {
 	InsertBranch(tx *gorm.DB, req ...UserLeaderRelation) error
 	Update(tx *gorm.DB, rq *UserLeaderRelation) (err error)
 	DeleteByUserIDs(tx *gorm.DB, userID ...string) (err error)
-	SelectByLeaderID(db *gorm.DB, leaderID string) []UserLeaderRelation
+	SelectByLeaderID(db *gorm.DB, leaderID ...string) []UserLeaderRelation
 	SelectByUserIDs(db *gorm.DB, userID ...string) []UserLeaderRelation
 }

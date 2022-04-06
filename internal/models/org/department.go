@@ -52,6 +52,7 @@ type DepartmentRepo interface {
 	Get(ctx context.Context, db *gorm.DB, id string) (res *Department)
 	SelectByPID(ctx context.Context, db *gorm.DB, pid string, status, page, limit int) (list []Department, total int64)
 	SelectByPIDAndName(ctx context.Context, db *gorm.DB, pid, name string) (one *Department)
+	SelectByPIDs(ctx context.Context, db *gorm.DB, status int, pid ...string) (one []Department)
 	SelectSupper(ctx context.Context, db *gorm.DB) *Department
 	Count(ctx context.Context, db *gorm.DB, status int) int64
 	GetMaxGrade(ctx context.Context, db *gorm.DB) int64
