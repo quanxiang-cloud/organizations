@@ -24,7 +24,11 @@ type MockUserRepoMockRecorder struct {
 	mock *MockUserRepo
 }
 
-var users = []*org.User{{ID: "1", Name: "test1", Email: "test1@test.com", Phone: "13688886666"}, {ID: "2", Name: "test2", Email: "test2@test.com", Phone: "13688886668"}}
+var users = []*org.User{
+	{ID: "1", Name: "test1", Email: "test1@test.com", Phone: "13688886666", UseStatus: 1, PasswordStatus: 1},
+	{ID: "2", Name: "test2", Email: "test2@test.com", Phone: "13688886668", UseStatus: 1, PasswordStatus: 1},
+	{ID: "0", Name: "test0", Email: "test0@test.com", Phone: "13688886660", UseStatus: 1, PasswordStatus: 0},
+}
 
 // NewMockUserRepo creates a new mock instance.
 func NewMockUserRepo(ctrl *gomock.Controller) *MockUserRepo {

@@ -64,7 +64,7 @@ func (suite *UserSuite) SetupTest() {
 	suite.db = db
 
 	suite.Ctx = ctx
-
+	suite.conf = *conf
 	mr, err := miniredis.Run()
 	if err != nil {
 		panic(err)
@@ -547,6 +547,7 @@ func (suite *UserSuite) TestRegister() {
 		redisClient:    suite.redisClient,
 		landlord:       mockLandlord,
 		userTenantRepo: userTenantRepo,
+		conf:           suite.conf,
 	}
 	suite.redisClient.SetEX(suite.Ctx, suite.conf.VerificationCode.RegisterCode+":"+rq.Email, "123456", suite.conf.VerificationCode.ExpireTime*time.Second)
 	res, err := suite.user.Register(suite.Ctx, rq)

@@ -98,7 +98,10 @@ func (mr *MockAccountRepoMockRecorder) InsertBranch(tx interface{}, req ...inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertBranch", reflect.TypeOf((*MockAccountRepo)(nil).InsertBranch), varargs...)
 }
 
-var accs = []org.Account{{ID: "1", UserID: "1", Account: "test1@test.com", Password: "24d04ec3c9f0e285791035a47ba3e61a"}, {ID: "2", UserID: "2", Account: "test2@test.com", Password: "24d04ec3c9f0e285791035a47ba3e61a"}}
+var accs = []org.Account{
+	{ID: "1", UserID: "1", Account: "test1@test.com", Password: "24d04ec3c9f0e285791035a47ba3e61a"},
+	{ID: "2", UserID: "2", Account: "test2@test.com", Password: "24d04ec3c9f0e285791035a47ba3e61a"},
+	{ID: "0", UserID: "0", Account: "test0@test.com", Password: "24d04ec3c9f0e285791035a47ba3e61a"}}
 
 // SelectByAccount mocks base method.
 func (m *MockAccountRepo) SelectByAccount(db *gorm.DB, account string) *org.Account {
@@ -122,9 +125,13 @@ func (mr *MockAccountRepoMockRecorder) SelectByAccount(db, account interface{}) 
 // SelectByUserID mocks base method.
 func (m *MockAccountRepo) SelectByUserID(db *gorm.DB, id string) []org.Account {
 
-	ret := m.ctrl.Call(m, "SelectByUserID", db, id)
-	ret0, _ := ret[0].([]org.Account)
-	return ret0
+	_ = m.ctrl.Call(m, "SelectByUserID", db, id)
+	for k := range accs {
+		if id == accs[k].UserID {
+			return []org.Account{accs[k]}
+		}
+	}
+	return nil
 }
 
 // SelectByUserID indicates an expected call of SelectByUserID.

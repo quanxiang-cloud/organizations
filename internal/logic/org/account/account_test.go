@@ -13,146 +13,310 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//import (
-//	"context"
-//	"github.com/go-redis/redis/v8"
-//	"github.com/quanxiang-cloud/cabin/logger"
-//	"github.com/quanxiang-cloud/organizations/pkg/configs"
-//	"github.com/stretchr/testify/suite"
-//	"gorm.io/gorm"
-//	"time"
-//
-//	"github.com/stretchr/testify/assert"
-//)
-//
-//type AccountSuite struct {
-//	suite.Suite
-//	conf        configs.Config
-//	redisClient redis.UniversalClient
-//	log         logger.AdaptedLogger
-//	account     Account
-//	Name        string
-//	Ctx         context.Context
-//	UserID      string
-//}
-//
-//func NewAccountSuite(ctx context.Context, conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger, name, userID string) *AccountSuite {
-//	return &AccountSuite{
-//		Ctx:         ctx,
-//		conf:        conf,
-//		redisClient: redisClient,
-//		log:         log,
-//		account:     NewAccount(conf, db, redisClient),
-//		Name:        name,
-//		UserID:      userID,
-//	}
-//}
-//
-//func (suite *AccountSuite) CheckPassword() {
-//	rq := LoginAccountRequest{
-//		UserName: suite.Name,
-//		Password: "654321a..",
-//		Types:    "pwd",
-//	}
-//
-//	res, err := suite.account.CheckPassword(suite.Ctx, &rq)
-//	assert.Nil(suite.T(), err)
-//	assert.NotNil(suite.T(), res)
-//	rq1 := LoginAccountRequest{
-//		UserName: suite.Name,
-//		Password: "12345",
-//		Types:    "pwd",
-//	}
-//	res1, err1 := suite.account.CheckPassword(suite.Ctx, &rq1)
-//	assert.NotNil(suite.T(), err1)
-//	assert.Nil(suite.T(), res1)
-//	format := time.Now().Format("20060102")
-//	rq2 := LoginAccountRequest{
-//		UserName: suite.Name,
-//		Password: format,
-//		Types:    "code",
-//	}
-//	res2, err2 := suite.account.CheckPassword(suite.Ctx, &rq2)
-//	assert.Nil(suite.T(), err2)
-//	assert.NotNil(suite.T(), res2)
-//	rq3 := LoginAccountRequest{
-//		UserName: suite.Name,
-//		Password: "123",
-//		Types:    "code",
-//	}
-//	res3, err3 := suite.account.CheckPassword(suite.Ctx, &rq3)
-//	assert.NotNil(suite.T(), err3)
-//	assert.Nil(suite.T(), res3)
-//}
-//
-//func (suite *AccountSuite) UpdatePassword() {
-//	rq := UpdatePasswordRequest{
-//		UserID:      suite.UserID,
-//		OldPassword: "654321Aa..",
-//		NewPassword: "654321Aa..",
-//	}
-//	res, err := suite.account.UpdatePassword(suite.Ctx, &rq)
-//	assert.Nil(suite.T(), err)
-//	assert.NotNil(suite.T(), res)
-//	rq1 := UpdatePasswordRequest{
-//		UserID:      suite.UserID,
-//		OldPassword: "12345",
-//		NewPassword: "123456",
-//	}
-//	res1, err1 := suite.account.UpdatePassword(suite.Ctx, &rq1)
-//	assert.NotNil(suite.T(), err1)
-//	assert.Nil(suite.T(), res1)
-//
-//}
-//
-////TestForgetUpdatePassword 此项测试必须与message服务联测
-//func (suite *AccountSuite) ForgetUpdatePassword() {
-//	rq := CodeRequest{
-//		UserName: suite.Name,
-//		Model:    suite.conf.VerificationCode.ForgetCode,
-//	}
-//	res, err := suite.account.GetCode(suite.Ctx, &rq)
-//	assert.Nil(suite.T(), err)
-//	assert.NotNil(suite.T(), res)
-//
-//	rq1 := ForgetResetRequest{
-//		UserName:    suite.Name,
-//		Code:        res.Code,
-//		NewPassword: "654321a..",
-//	}
-//	res1, err1 := suite.account.ForgetUpdatePassword(suite.Ctx, &rq1)
-//	assert.Nil(suite.T(), err1)
-//	assert.NotNil(suite.T(), res1)
-//}
-//
-//func (suite *AccountSuite) AdminUpdatePassword() {
-//
-//	rq := AdminUpdatePasswordRequest{
-//		UserIDs:   []string{suite.UserID},
-//		CreatedBy: "adminUserID",
-//	}
-//	res, err := suite.account.AdminUpdatePassword(suite.Ctx, &rq)
-//	assert.Nil(suite.T(), err)
-//	assert.NotNil(suite.T(), res)
-//
-//	rq1 := AdminUpdatePasswordRequest{
-//		UserIDs:   []string{suite.UserID},
-//		CreatedBy: "adminUserID",
-//	}
-//	res1, err1 := suite.account.AdminUpdatePassword(suite.Ctx, &rq1)
-//	assert.Nil(suite.T(), err1)
-//	assert.NotNil(suite.T(), res1)
-//}
-//
-//func (suite *AccountSuite) GetCode() {
-//	rq := CodeRequest{
-//		UserName: suite.Name,
-//		Model:    suite.conf.VerificationCode.ResetCode,
-//	}
-//	res1, err1 := suite.account.GetCode(suite.Ctx, &rq)
-//	assert.Nil(suite.T(), err1)
-//	assert.NotNil(suite.T(), res1)
-//
-//	suite.redisClient.Del(suite.Ctx, suite.conf.VerificationCode.ResetCode+":"+suite.Name)
-//
-//}
+import (
+	"context"
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/elliotchance/redismock/v8"
+	"github.com/go-redis/redis/v8"
+	"github.com/golang/mock/gomock"
+	"github.com/quanxiang-cloud/cabin/logger"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
+	"github.com/quanxiang-cloud/organizations/mock"
+	"github.com/quanxiang-cloud/organizations/pkg/configs"
+	"github.com/quanxiang-cloud/organizations/pkg/header2"
+	"github.com/quanxiang-cloud/organizations/pkg/message"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"testing"
+	"time"
+)
+
+type AccountSuite struct {
+	suite.Suite
+	conf        configs.Config
+	redisClient redis.UniversalClient
+	log         logger.AdaptedLogger
+	account     Account
+	Ctx         context.Context
+	db          *gorm.DB
+	t           gomock.TestReporter
+}
+
+func TestAccount(t *testing.T) {
+	d := new(AccountSuite)
+	d.t = t
+	suite.Run(t, d)
+}
+
+func (suite *AccountSuite) SetupTest() {
+	conf, err := configs.NewConfig("../../../../configs/config.yml")
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), conf)
+	ctx := context.Background()
+	ctx = header2.SetContext(ctx, user.TenantID, "")
+	conn, _, err := sqlmock.New()
+
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		SkipInitializeWithVersion: true,
+		Conn:                      conn,
+	}), &gorm.Config{})
+	suite.db = db
+
+	suite.Ctx = ctx
+	suite.conf = *conf
+	mr, err := miniredis.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	mock := redismock.NewNiceMock(client)
+	suite.redisClient = mock
+
+}
+
+func (suite *AccountSuite) TestCheckPassword() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()),
+	)
+
+	rq := &LoginAccountRequest{
+		UserName: "test1@test.com",
+		Password: "654321a..",
+		Types:    "pwd",
+	}
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	res, err := suite.account.CheckPassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+
+	rq.Password = "123456"
+	rq.Types = "code"
+
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()),
+	)
+	suite.redisClient.SetEX(suite.Ctx, suite.conf.VerificationCode.LoginCode+":"+rq.UserName, "123456", suite.conf.VerificationCode.ExpireTime*time.Second)
+	res, err = suite.account.CheckPassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
+
+func (suite *AccountSuite) TestUpdatePassword() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByUserID(gomock.Any(), gomock.Any()),
+		accountRepo.EXPECT().UpdatePasswordByUserID(gomock.Any(), gomock.Any()),
+	)
+
+	rq := &UpdatePasswordRequest{
+		UserID:      "1",
+		OldPassword: "654321a..",
+		NewPassword: "654321Aa..",
+	}
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	res, err := suite.account.UpdatePassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
+
+func (suite *AccountSuite) TestFirstUpdatePassword() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByUserID(gomock.Any(), gomock.Any()),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()),
+		accountRepo.EXPECT().UpdatePasswordByUserID(gomock.Any(), gomock.Any()),
+		userRepo.EXPECT().UpdateByID(gomock.Any(), gomock.Any(), gomock.Any()),
+	)
+
+	rq := &FirstSetPasswordRequest{
+		UserID:      "0",
+		OldPassword: "654321a..",
+		NewPassword: "654321Aa..",
+	}
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	res, err := suite.account.FirstUpdatePassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
+
+func (suite *AccountSuite) TestForgetUpdatePassword() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()),
+		accountRepo.EXPECT().UpdatePasswordByUserID(gomock.Any(), gomock.Any()),
+	)
+
+	rq := &ForgetResetRequest{
+		UserName:    "test1@test.com",
+		Code:        "123456",
+		NewPassword: "654321Aa..",
+	}
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	suite.redisClient.SetEX(suite.Ctx, suite.conf.VerificationCode.ForgetCode+":"+rq.UserName, "123456", suite.conf.VerificationCode.ExpireTime*time.Second)
+	res, err := suite.account.ForgetUpdatePassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
+
+func (suite *AccountSuite) TestAdminUpdatePassword() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().UpdatePasswordByUserID(gomock.Any(), gomock.Any()).AnyTimes(),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes(),
+	)
+
+	rq := &AdminUpdatePasswordRequest{
+		UserIDs: []string{"1"},
+		SendMessage: []user.SendMessage{
+			user.SendMessage{
+				UserID:      "1",
+				SendChannel: 0,
+			},
+		},
+	}
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+	}
+	res, err := suite.account.AdminUpdatePassword(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
+
+func (suite *AccountSuite) TestGetCode() {
+	ctl := gomock.NewController(suite.t)
+	defer ctl.Finish()
+
+	accountRepo := mock.NewMockAccountRepo(ctl)
+	userRepo := mock.NewMockUserRepo(ctl)
+
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()).AnyTimes(),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes(),
+	)
+
+	suite.account = &account{
+		DB:          suite.db,
+		conf:        suite.conf,
+		accountRepo: accountRepo,
+		user:        userRepo,
+		redisClient: suite.redisClient,
+		message:     message.NewMessage(suite.conf.InternalNet),
+	}
+
+	rq := &CodeRequest{
+		UserName: "test1@test.com",
+		Model:    "code:login",
+	}
+
+	res, err := suite.account.GetCode(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+
+	rq.Model = "code:reset"
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()).AnyTimes(),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes(),
+	)
+	res, err = suite.account.GetCode(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+
+	rq.Model = "code:forget"
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()).AnyTimes(),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes(),
+	)
+	res, err = suite.account.GetCode(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+
+	rq.UserName = "testnull@test.com"
+	rq.Model = "code:register"
+	gomock.InOrder(
+
+		accountRepo.EXPECT().SelectByAccount(gomock.Any(), gomock.Any()).AnyTimes(),
+		userRepo.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes(),
+	)
+	res, err = suite.account.GetCode(suite.Ctx, rq)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), res)
+}
