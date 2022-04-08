@@ -457,6 +457,9 @@ func (u *othersServer) dealUserLeaderRelation(c context.Context, tx *gorm.DB, us
 			return err
 		}
 		for _, v := range leadersID {
+			if v == "" || v == "0" {
+				continue
+			}
 			relation := org.UserLeaderRelation{
 				ID:       id2.ShortID(0),
 				UserID:   userID,
