@@ -17,7 +17,7 @@ jobs:
 #      - run: go test -cover ./...
   build_alpha:
     runs-on: self-hosted
-    needs: [ lint,test ]
+    needs: [ lint ]
     if: github.ref == 'refs/heads/alpha'
     steps:
       - run: go mod tidy
@@ -29,7 +29,7 @@ jobs:
         
   deploy_alpha:
     runs-on: self-hosted
-    needs: [ lint,test,build_alpha ]
+    needs: [ lint,build_alpha ]
     if: startsWith(github.ref, 'refs/heads/alpha')
     steps:
       - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
