@@ -15,14 +15,25 @@ jobs:
 #    steps:
 #      - run: go test ./...
 #      - run: go test -cover ./...
-
-  deploy_alpha:
+  build_alpha:
     runs-on: self-hosted
-    needs: [ lint ]
+    needs: [ lint,test ]
     if: github.ref == 'refs/heads/alpha'
     steps:
-      - run: GOOS=linux GOOSARCH=amd64 go build -o ${{ env.PROJECT_NAME }} ./cmd/.
-      - run: /root/github-runners/dev_auto.sh ${{ env.PROJECT_NAME }}
+      - run: go mod tidy
+      - run: go mod vendor
+      - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
+      - run: docker build -t ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG .
+      - run: docker push ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG
+      - run: docker rmi ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG
+        
+  deploy_alpha:
+    runs-on: self-hosted
+    needs: [ lint,test,build_alpha ]
+    if: startsWith(github.ref, 'refs/heads/alpha')
+    steps:
+      - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
+      - run: helm upgrade ${{ env.PROJECT_NAME }} /root/quanxiang_charts_alpha/${{ env.PROJECT_NAME }} --kubeconfig ~/.kube/config_alpha --set image.tag=$IMAGE_TAG --set image.repo=${{env.IMAGE_PREFIX}} -n lowcode
 
   build_test:
     runs-on: self-hosted
