@@ -277,6 +277,7 @@ func (u *account) CheckPassword(c context.Context, r *LoginAccountRequest) (*Log
 			err = error2.New(code.AccountPasswordCountErr, int(info.PwdCount)-(errNum+1))
 		}
 	case loginTypeLdap:
+		logger.Logger.Info("ldap login")
 		c = context.WithValue(c, user.TenantID, oldUser.TenantID)
 		flag, err = u.ldap(c, r.Header, r)
 	case loginTypeCode:
