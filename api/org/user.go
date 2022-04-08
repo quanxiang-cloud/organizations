@@ -270,7 +270,7 @@ func (u *UserAPI) OtherServerAddUser(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r.Profile = profile
 	res, err := u.other.AddUsers(ginheader.MutateContext(c), r)
-	u.other.PushUserToSearch(ginheader.MutateContext(c))
+	u.other.PushUserToSearch(ginheader.MutateContext(c), nil, nil)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -286,7 +286,7 @@ func (u *UserAPI) OtherServerAddDepartment(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r.Profile = profile
 	res, err := u.other.AddDepartments(ginheader.MutateContext(c), r)
-	u.other.PushDepToSearch(ginheader.MutateContext(c))
+	u.other.PushDepToSearch(ginheader.MutateContext(c), nil)
 	resp.Format(res, err).Context(c)
 	return
 }

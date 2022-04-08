@@ -14,12 +14,12 @@ limitations under the License.
 */
 import (
 	"context"
+	"github.com/go-redis/redis/v8"
+	"github.com/quanxiang-cloud/cabin/logger"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
 	"gorm.io/gorm"
 	"net/http"
 
-	"github.com/go-redis/redis/v8"
-
-	"github.com/quanxiang-cloud/cabin/logger"
 	client2 "github.com/quanxiang-cloud/cabin/tailormade/client"
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/other"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
@@ -38,6 +38,7 @@ type sync struct {
 
 // NewSync new
 func NewSync(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) Sync {
+	user.NewSearch(db)
 	return &sync{
 		Oth:    other.NewOtherServer(conf, db, redisClient),
 		Client: client2.New(conf.InternalNet),
@@ -95,8 +96,28 @@ func (s *sync) SyncData(ctx context.Context, req *SyncRequest) (*SyncResponse, e
 		logger.Logger.Error(err)
 		return nil, err
 	}
-	return nil, err
+	sig1 := make(chan int, 1)
+	sig2 := make(chan int, 1)
+	to := make(chan int)
 
+	go s.Oth.PushUserToSearch(ctx, sig2, to)
+	go s.Oth.PushDepToSearch(ctx, sig1)
+
+	var i = 0
+	var total = 0
+	for {
+		if total != 0 && i >= (total) {
+			return nil, nil
+		}
+		select {
+		case total = <-to:
+		case n := <-sig1:
+			i = i + n
+		case n := <-sig2:
+			i = i + n
+
+		}
+	}
 }
 
 // getData
