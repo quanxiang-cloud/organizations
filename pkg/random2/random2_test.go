@@ -18,10 +18,12 @@ import (
 )
 
 func TestRandom2(t *testing.T) {
-	for i := 0; i <= 100; i++ {
-		randomString := RandomString(8, 15)
-		fmt.Println(randomString)
-	}
+	r1 := RandomString(8, 15)
 
-	fmt.Println(CheckPassword("1Aa.312|3AAaa", 7, 15))
+	fmt.Println(CheckPassword(r1, 7, 15))
+	fmt.Println(CheckPassword(r1, 8, 15))
+
+	r2 := RandomString(8, 0)
+
+	fmt.Println(CheckPassword(r2, 8, 0))
 }
