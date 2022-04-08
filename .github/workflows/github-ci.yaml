@@ -25,7 +25,7 @@ jobs:
       - run: echo IMAGE_TAG="v${{ env.DATE }}-${GITHUB_SHA::7}" >> $GITHUB_ENV
       - run: docker build -t ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG .
       - run: docker push ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG
-      - run: docker rmi ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG
+#      - run: docker rmi ${{ env.IMAGE_PREFIX }}/${{ env.PROJECT_NAME }}:$IMAGE_TAG
 
   deploy_alpha:
     runs-on: self-hosted
