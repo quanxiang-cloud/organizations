@@ -14,28 +14,29 @@ limitations under the License.
 */
 import (
 	"fmt"
-	"github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
-	"golang.org/x/net/context"
+	"github.com/quanxiang-cloud/organizations/internal/models/org"
 	"testing"
-
-	"github.com/quanxiang-cloud/cabin/logger"
-	mysql2 "github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
-	"github.com/quanxiang-cloud/organizations/pkg/configs"
 )
 
 func TestTreeRouter(t *testing.T) {
-	conf, err := configs.NewConfig("../../../configs/config.yml")
-	if err != nil {
-		panic(err)
-	}
-	log := logger.Logger
-	dbConn, err := mysql2.New(conf.Mysql, log)
-	if err != nil {
-		panic(err)
-	}
-	depRepo := mysql.NewDepartmentRepo()
-	ctx := context.Background()
-	list, _ := depRepo.PageList(ctx, dbConn, 1, 1, 1000)
+	list := make([]org.Department, 0)
+	list = append(list, org.Department{
+		ID:   "1",
+		PID:  "",
+		Name: "Qingcloud",
+	}, org.Department{
+		ID:   "2",
+		PID:  "1",
+		Name: "dep",
+	}, org.Department{
+		ID:   "3",
+		PID:  "1",
+		Name: "研发",
+	}, org.Department{
+		ID:   "4",
+		PID:  "3",
+		Name: "超级部门",
+	})
 	router := NewDepartmentRouter()
 	router.AddRoute(list)
 	d := "Qingcloud/dep"
