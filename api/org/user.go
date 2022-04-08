@@ -75,7 +75,7 @@ func (u *UserAPI) Add(c *gin.Context) {
 		return
 	}
 	//push data to search
-	u.search.PushUser(c, nil, res.Users...)
+	u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
 	resp.Format(res, nil).Context(c)
 	return
 }
