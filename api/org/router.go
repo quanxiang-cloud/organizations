@@ -14,6 +14,7 @@ limitations under the License.
 */
 import (
 	"context"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 
 	"github.com/gin-gonic/gin"
 
@@ -40,10 +41,11 @@ type Router struct {
 	c configs.Config
 
 	engine *gin.Engine
+	bus    *publish.Bus
 }
 
 // NewRouter new router
-func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) (*Router, error) {
+func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, bus *publish.Bus) (*Router, error) {
 	db, err := mysql.New(c.Mysql, log)
 	if err != nil {
 		return nil, err
@@ -73,7 +75,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 	es.New(&c.Elastic, log)
 
 	verification.RegisterValidation()
-	userAPI := NewUserAPI(c, db, redisClient, log)
+	userAPI := NewUserAPI(c, db, redisClient, log, bus)
 
 	manage := v1.Group("/m")
 	manageUser := manage.Group("/user")
@@ -117,7 +119,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 		viewerUser.POST("/ids", userAPI.GetUsersByIDs)
 	}
 
-	depAPI := NewDepartmentAPI(c, db, redisClient, log)
+	depAPI := NewDepartmentAPI(c, db, redisClient, log, bus)
 	manageDep := manage.Group("/dep")
 	{
 
@@ -196,4 +198,5 @@ func (r *Router) Run() {
 
 // Close close
 func (r *Router) Close() {
+	r.bus.Close()
 }

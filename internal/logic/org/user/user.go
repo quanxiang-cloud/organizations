@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/quanxiang-cloud/organizations/pkg/component/event"
 	"net/http"
 	"strings"
 	"time"
@@ -324,9 +325,10 @@ type UpdateUserRequest struct {
 
 // UpdateUserResponse update response
 type UpdateUserResponse struct {
-	ID         string      `json:"id"`
-	UpdateUser *org.User   `json:"-"`
-	Users      []*org.User `json:"-"`
+	ID         string           `json:"id"`
+	UpdateUser *org.User        `json:"-"`
+	Users      []*org.User      `json:"-"`
+	Spec       []*event.OrgSpec `json:"-"`
 }
 
 // Update update base info
@@ -386,13 +388,24 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		tx.Rollback()
 		return nil, err
 	}
-
+	response := &UpdateUserResponse{ID: r.ID}
 	if len(r.Dep) > 0 {
+		oldRelations := u.userDepRepo.SelectByUserIDs(u.DB, r.ID)
+
+		for k := range oldRelations {
+			orgRelation := &event.OrgSpec{}
+			orgRelation.UserID = r.ID
+			orgRelation.Action = event.ActionDel
+			orgRelation.SourceID = oldRelations[k].DepID
+			response.Spec = append(response.Spec, orgRelation)
+		}
+
 		err = u.userDepRepo.DeleteByUserIDs(tx, r.ID)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
+
 		for _, v := range r.Dep {
 			relation := org.UserDepartmentRelation{
 				ID:     id2.ShortID(0),
@@ -400,12 +413,19 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 				DepID:  v.DepID,
 				Attr:   v.Attr,
 			}
+			orgNewRelation := &event.OrgSpec{}
+			orgNewRelation.UserID = r.ID
+			orgNewRelation.SourceID = v.DepID
+			orgNewRelation.Action = event.ActionAdd
+			response.Spec = append(response.Spec, orgNewRelation)
+
 			err := u.userDepRepo.Add(tx, &relation)
 			if err != nil {
 				tx.Rollback()
 				return nil, err
 			}
 		}
+
 	}
 
 	if len(r.Leader) > 0 {
@@ -426,6 +446,11 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 				LeaderID: v.UserID,
 				Attr:     v.Attr,
 			}
+			orgNewRelation := &event.OrgSpec{}
+			orgNewRelation.UserID = r.ID
+			orgNewRelation.SourceID = v.UserID
+			orgNewRelation.Action = event.ActionAdd
+			response.Spec = append(response.Spec, orgNewRelation)
 			err = u.userLeaderRepo.Add(tx, &relation)
 			if err != nil {
 				tx.Rollback()
@@ -434,7 +459,7 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		}
 	}
 	tx.Commit()
-	response := &UpdateUserResponse{ID: r.ID}
+
 	response.UpdateUser = updateData
 
 	if len(r.Leader) > 0 {
@@ -853,7 +878,8 @@ type StatusRequest struct {
 
 //StatusResponse response
 type StatusResponse struct {
-	User *org.User `json:"-"`
+	User *org.User        `json:"-"`
+	Spec []*event.OrgSpec `json:"-"`
 }
 
 // UpdateUserStatus update one user status
@@ -894,7 +920,18 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 	}
 
 	err = u.accountReo.Update(u.DB, &account)
+	response := &StatusResponse{User: old}
 	if r.UseStatus == consts.DelStatus {
+		relations := u.userDepRepo.SelectByUserIDs(u.DB, r.ID)
+
+		for k := range relations {
+			rel := &event.OrgSpec{}
+			rel.UserID = r.ID
+			rel.Action = event.ActionDel
+			rel.SourceID = relations[k].DepID
+			response.Spec = append(response.Spec, rel)
+		}
+
 		err = u.userDepRepo.DeleteByUserIDs(tx, r.ID)
 		err = u.userRepo.UpdateByID(c, tx, old)
 		err = u.accountReo.DeleteByUserID(tx, r.ID)
@@ -906,7 +943,7 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 	}
 	tx.Commit()
 
-	return &StatusResponse{User: old}, nil
+	return response, nil
 }
 
 //ListStatusRequest update list user status request
@@ -1001,12 +1038,14 @@ type ChangeUsersDEPRequest struct {
 
 // ChangeUsersDEPResponse change user dep response
 type ChangeUsersDEPResponse struct {
-	Users []*org.User `json:"-"`
+	Users []*org.User      `json:"-"`
+	Spec  []*event.OrgSpec `json:"-"`
 }
 
 // AdminChangeUsersDEP change list user dep
 func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest) (*ChangeUsersDEPResponse, error) {
 	tx := u.DB.Begin()
+	specs := make([]*event.OrgSpec, 0)
 	for _, v := range rq.UsersID {
 		oldRelation := u.userDepRepo.SelectByUserIDAndDepID(u.DB, v, rq.OldDepID)
 		if oldRelation != nil {
@@ -1016,6 +1055,17 @@ func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest)
 				tx.Rollback()
 				return nil, error2.New(code.ChangeDepErr)
 			}
+			specs = append(specs, &event.OrgSpec{
+				UserID:   v,
+				SourceID: rq.OldDepID,
+				Action:   event.ActionDel,
+			})
+			specs = append(specs, &event.OrgSpec{
+				UserID:   v,
+				SourceID: rq.NewDepID,
+				Action:   event.ActionAdd,
+			})
+
 			u.redisClient.Del(c, consts.RedisTokenUserInfo+v)
 		}
 
@@ -1025,6 +1075,9 @@ func (u *user) AdminChangeUsersDEP(c context.Context, rq *ChangeUsersDEPRequest)
 	response := &ChangeUsersDEPResponse{}
 	if len(users) > 0 {
 		response.Users = append(response.Users, users...)
+	}
+	if len(specs) > 0 {
+		response.Spec = append(response.Spec, specs...)
 	}
 	return response, nil
 }
@@ -1154,23 +1207,26 @@ func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([]
 			if relations[k].LeaderID != "" {
 				ls := make([]Leader, 0)
 				get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
-				leader := Leader{}
-				leader.ID = get.ID
-				leader.Name = get.Name
-				leader.Email = get.Email
-				ls = append(ls, leader)
-				array, err := makeLeaderToTop(c, u, get.ID, startUserID)
-				if err != nil {
-					return nil, err
-				}
-				if array != nil {
-					for k1 := range array {
-						ll := append(ls, array[k1]...)
-						res = append(res, ll)
+				if get != nil {
+					leader := Leader{}
+					leader.ID = get.ID
+					leader.Name = get.Name
+					leader.Email = get.Email
+					ls = append(ls, leader)
+					array, err := makeLeaderToTop(c, u, get.ID, startUserID)
+					if err != nil {
+						return nil, err
 					}
-					continue
+					if array != nil {
+						for k1 := range array {
+							ll := append(ls, array[k1]...)
+							res = append(res, ll)
+						}
+						continue
+					}
+					res = append(res, ls)
 				}
-				res = append(res, ls)
+
 			}
 
 		}

@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"context"
 	"flag"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"os"
 	"os/signal"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 )
 
 var (
+	pubsubName = flag.String("pubsub-name", "org-redis-pubsub", "The dapr pubsub component name.")
 	configPath = flag.String("config", "configs/config.yml", "-config 配置文件地址")
 )
 
@@ -37,11 +39,18 @@ func main() {
 		panic(err)
 	}
 	ctx := context.Background()
-	router, err := org.NewRouter(ctx, *conf, log)
+	bus, err := publish.New(ctx, log,
+		publish.WithPubsubName(*pubsubName),
+	)
 	if err != nil {
-
+		log.Error(err, "new bus")
 		panic(err)
 	}
+	router, err := org.NewRouter(ctx, *conf, log, bus)
+	if err != nil {
+		panic(err)
+	}
+
 	go router.Run()
 
 	c := make(chan os.Signal, 1)

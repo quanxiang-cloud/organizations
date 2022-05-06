@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"gorm.io/gorm"
 
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -62,10 +63,11 @@ type othersServer struct {
 	conf           configs.Config
 	userLeaderRepo org.UserLeaderRelationRepo
 	search         *user.Search
+	bus            *publish.Bus
 }
 
 // NewOtherServer 实例
-func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) OthServer {
+func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, bus *publish.Bus) OthServer {
 	return &othersServer{
 		userRepo:    mysql2.NewUserRepo(),
 		userDepRepo: mysql2.NewUserDepartmentRelationRepo(),
@@ -79,6 +81,7 @@ func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.Universa
 		conf:           conf,
 		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
 		search:         user.GetSearch(),
+		bus:            bus,
 	}
 }
 

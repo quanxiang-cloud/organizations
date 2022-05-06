@@ -13,6 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
+	"github.com/quanxiang-cloud/organizations/internal/logic/common"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"gorm.io/gorm"
 	"strings"
 
@@ -39,18 +41,20 @@ type UserAPI struct {
 	conf        configs.Config
 	redisClient redis.UniversalClient
 	search      *user.Search
+	bus         *publish.Bus
 }
 
 // NewUserAPI new
-func NewUserAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger) UserAPI {
+func NewUserAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger, bus *publish.Bus) UserAPI {
 	user.NewSearch(db)
 	return UserAPI{
 		user:        user.NewUser(conf, db, redisClient),
-		other:       other.NewOtherServer(conf, db, redisClient),
+		other:       other.NewOtherServer(conf, db, redisClient, bus),
 		log:         log,
 		conf:        conf,
 		redisClient: redisClient,
 		search:      user.GetSearch(),
+		bus:         bus,
 	}
 }
 
@@ -99,7 +103,12 @@ func (u *UserAPI) Update(c *gin.Context) {
 	}
 	if len(res.Users) > 0 {
 		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+
 	}
+	if len(res.Spec) > 0 {
+		common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
+	}
+
 	resp.Format(res, nil).Context(c)
 	return
 }
@@ -148,6 +157,10 @@ func (u *UserAPI) UpdateStatus(c *gin.Context) {
 	res, err := u.user.UpdateUserStatus(ginheader.MutateContext(c), r)
 	if res.User != nil {
 		u.search.PushUser(ginheader.MutateContext(c), nil, res.User)
+
+	}
+	if len(res.Spec) > 0 {
+		common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
 	}
 	resp.Format(res, err).Context(c)
 	return
@@ -238,6 +251,9 @@ func (u *UserAPI) AdminChangeUsersDEP(c *gin.Context) {
 	res, err := u.user.AdminChangeUsersDEP(ginheader.MutateContext(c), r)
 	if err == nil && len(res.Users) > 0 {
 		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	}
+	if len(res.Spec) > 0 {
+		common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
 	}
 	resp.Format(res, err).Context(c)
 	return
