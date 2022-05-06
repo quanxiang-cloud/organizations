@@ -52,6 +52,9 @@ create table org_user
     deleted_by       varchar(64) null
 );
 
+create unique index org_user_email_uindex
+    on org_user (email);
+
 create table org_user_account
 (
     id         varchar(100) not null
@@ -68,7 +71,8 @@ create table org_user_account
     tenant_id  varchar(64) null
 );
 
-create index account
+
+create unique index org_user_account_account_uindex
     on org_user_account (account);
 
 create table org_user_department_relation
