@@ -3,8 +3,9 @@ kind: Subscription
 metadata:
   name: org-pubsub
 spec:
-  topic: .Org
+  topic: lowcode.Org
   route: /user/relation
   pubsubname: org-redis-pubsub
 scopes:
-  - message-org
+  - org
+  - warden

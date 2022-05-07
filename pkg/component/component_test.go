@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/quanxiang-cloud/cabin/logger"
@@ -57,7 +58,8 @@ func TestSub(t *testing.T) {
 }
 
 func fn(c context.Context, data *event.OrgSpec) {
-	fmt.Println("data:", data)
+	marshal, _ := json.Marshal(data)
+	fmt.Println("data:", string(marshal))
 }
 
 //before exec  "dapr run --app-id org-p --app-protocol http --dapr-http-port 8003 --components-path  subscribe/samples/"
@@ -68,7 +70,7 @@ func TestPub(t *testing.T) {
 	ctx := context.Background()
 	log := logger.Logger
 	bus, err := publish.New(ctx, log,
-		publish.WithPubsubName("org-redis-pubsub"),
+		publish.WithPubsubName("org-redis-pubsub"), publish.WithTenant("lowcode"),
 	)
 	if err != nil {
 		panic(err)
