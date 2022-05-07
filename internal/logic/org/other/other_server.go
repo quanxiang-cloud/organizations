@@ -15,8 +15,8 @@ limitations under the License.
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/go-redis/redis/v8"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"gorm.io/gorm"
 
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -45,8 +45,8 @@ type OthServer interface {
 	GetAllUsers(c context.Context, r *UserAllRequest) (res *UserAllResp, err error)
 	GetAllDeps(c context.Context, r *DepAllRequest) (res *DepAllDepsResp, err error)
 	OtherGetUsersByDepID(c context.Context, r *GetUsersByDepIDRequest) (res *GetUsersByDepIDResponse, err error)
-	PushUserToSearch(c context.Context)
-	PushDepToSearch(c context.Context)
+	PushUserToSearch(c context.Context, sig, total chan int)
+	PushDepToSearch(c context.Context, sig chan int)
 }
 
 // othersServer
@@ -63,10 +63,11 @@ type othersServer struct {
 	conf           configs.Config
 	userLeaderRepo org.UserLeaderRelationRepo
 	search         *user.Search
+	bus            *publish.Bus
 }
 
 // NewOtherServer 实例
-func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) OthServer {
+func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, bus *publish.Bus) OthServer {
 	return &othersServer{
 		userRepo:    mysql2.NewUserRepo(),
 		userDepRepo: mysql2.NewUserDepartmentRelationRepo(),
@@ -80,6 +81,7 @@ func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.Universa
 		conf:           conf,
 		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
 		search:         user.GetSearch(),
+		bus:            bus,
 	}
 }
 
@@ -144,18 +146,24 @@ func (u *othersServer) AddUsers(c context.Context, r *AddUsersRequest) (res *Add
 	return res, nil
 }
 
-func (u *othersServer) PushUserToSearch(c context.Context) {
+func (u *othersServer) PushUserToSearch(c context.Context, sig, total chan int) {
 	var index = 1
 	var size = 300
 	for {
+
 		list, _ := u.userRepo.PageList(c, u.DB, 0, index, size, nil)
 		if len(list) > 0 {
-			u.search.PushUser(c, nil, list...)
-			index++
+			u.search.PushUser(c, sig, list...)
+			index = index + 1
 			continue
+		}
+		if total != nil {
+
+			total <- index
 		}
 		break
 	}
+
 }
 
 // AddDepartmentRequest other server add  department to org request
@@ -202,8 +210,8 @@ func (u *othersServer) AddDepartments(c context.Context, r *AddDepartmentRequest
 	return res, nil
 }
 
-func (u *othersServer) PushDepToSearch(c context.Context) {
-	u.search.PushDep(c, nil)
+func (u *othersServer) PushDepToSearch(c context.Context, sig chan int) {
+	u.search.PushDep(c, sig)
 }
 
 //GetUserByIDsRequest get user by ids request
@@ -452,6 +460,9 @@ func (u *othersServer) dealUserLeaderRelation(c context.Context, tx *gorm.DB, us
 			return err
 		}
 		for _, v := range leadersID {
+			if v == "" || v == "0" {
+				continue
+			}
 			relation := org.UserLeaderRelation{
 				ID:       id2.ShortID(0),
 				UserID:   userID,
@@ -473,7 +484,7 @@ func (u *othersServer) addDEP(c context.Context, reqData []AddDep, isUpdate int,
 	if supper != nil {
 		supperID = supper.ID
 		for k := range reqData {
-			if reqData[k].PID == "" {
+			if reqData[k].PID == "" && reqData[k].ID != supperID {
 				reqData[k].PID = supperID
 				break
 			}
@@ -487,15 +498,17 @@ func (u *othersServer) addDEP(c context.Context, reqData []AddDep, isUpdate int,
 		}
 	}
 
-	makeDepGrade(supperID, reqData, consts.FirsGrade)
-
 	oldDeps, _ := u.depRepo.PageList(c, u.DB, 0, 1, 100000)
 
 	res, err := u.insertOrUpdateDep(c, oldDeps, reqData, supperID, profile)
 	if err != nil {
 		return nil, err
 	}
-
+	all, _ := u.depRepo.PageList(c, u.DB, 1, 1, 100000)
+	makeDepGrade(supperID, all, consts.FirsGrade)
+	for k := range all {
+		u.depRepo.Update(c, u.DB, &all[k])
+	}
 	return res, nil
 }
 
@@ -580,7 +593,7 @@ func (u *othersServer) insertOrUpdateDep(c context.Context, oldDeps []org.Depart
 
 }
 
-func makeDepGrade(pid string, list []AddDep, grade int) {
+func makeDepGrade(pid string, list []org.Department, grade int) {
 	for k := range list {
 		if list[k].PID == pid {
 			list[k].Grade = grade + 1

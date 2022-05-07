@@ -219,10 +219,12 @@ func (l *ldap) UpdatePassword(ctx context.Context, header http.Header, reqs *Use
 // Auth auth
 func (l *ldap) Auth(ctx context.Context, header http.Header, reqs *AuthReq) (*AuthResp, error) {
 	response := AuthResp{}
-	err := POST(ctx, &l.client, header, host+authURI, reqs, &response)
+	var flag = false
+	err := POST(ctx, &l.client, header, host+authURI, reqs, &flag)
 	if err != nil {
 		return nil, err
 	}
+	response.Flag = flag
 	return &response, err
 }
 

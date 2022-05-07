@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
+	"github.com/quanxiang-cloud/organizations/pkg/es"
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	redis2 "github.com/quanxiang-cloud/cabin/tailormade/db/redis"
@@ -54,11 +55,12 @@ func main() {
 		logger.Logger.Error(err)
 		panic(err)
 	}
+	es.New(&conf.Elastic, adaptedLogger)
 	sync := &logic.SyncRequest{}
 	//任务参数 kube里面参数放在commond里面
-	sync.SyncDEP = 1
-	sync.IsUpdate = 1
-	sync.RequestURL = "http://127.0.0.1:8010/api/v1/sk/sync/refactor/get"
+	//sync.SyncDEP = 1
+	//sync.IsUpdate = 1
+	//sync.RequestURL = "http://127.0.0.1:8010/api/v1/sk/sync/refactor/get"
 	sync.TenantID = ""
 	if *isUpdate != 1 {
 		sync.IsUpdate = 0
@@ -70,11 +72,11 @@ func main() {
 	} else {
 		sync.SyncDEP = *syncDep
 	}
-	//if *requestURL == "" {
-	//	logger.Logger.Warn("请求数据地址不能为空")
-	//	return
-	//}
-	//sync.RequestURL = *requestURL
+	if *requestURL == "" {
+		logger.Logger.Warn("请求数据地址不能为空")
+		return
+	}
+	sync.RequestURL = *requestURL
 	fmt.Println(sync)
 	ctx := context.Background()
 	ctx = header2.SetContext(ctx, user.TenantID, sync.TenantID)

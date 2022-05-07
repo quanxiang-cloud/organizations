@@ -1,5 +1,5 @@
 name=syncjob
-version=v0.0.11syncjob
+version=v1.0.3.4syncjob
 devHost=192.168.200.20
 devUser=ubuntu
 repository=lowcode
