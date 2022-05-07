@@ -12,12 +12,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// DealRelation deal rlation func
 type DealRelation func(context.Context, *event.OrgSpec)
 
+// Subscribe Subscribe
 type Subscribe interface {
 	Scaffold(context.Context, event.Data, DealRelation) error
 }
 
+// Component Component
 type Component struct {
 	e *gin.RouterGroup
 
@@ -25,6 +28,7 @@ type Component struct {
 	fn  DealRelation
 }
 
+// New new
 func New(ctx context.Context, sender Subscribe, opts ...Option) *Component {
 	c := &Component{
 		sub: sender,
@@ -65,20 +69,24 @@ func errHandle(c *gin.Context, err error) {
 	c.JSON(http.StatusOK, nil)
 }
 
+// Option Option
 type Option func(*Component)
 
+// WithRouter WithRouter
 func WithRouter(group *gin.RouterGroup) Option {
 	return func(c *Component) {
 		c.e = group
 	}
 }
 
+// WithFunc WithFunc
 func WithFunc(fn DealRelation) Option {
 	return func(c *Component) {
 		c.fn = fn
 	}
 }
 
+// Error
 var (
 	ErrNoFunc = errors.New("no func")
 )

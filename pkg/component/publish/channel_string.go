@@ -10,13 +10,16 @@ func _() {
 	_ = x[Org-1]
 }
 
-const _Channel_name = "NoneOrg"
+// channelName topic
+const channelName = "NoneOrg"
 
-var _Channel_index = [...]uint8{0, 4, 7}
+// channelIndex index
+var channelIndex = [...]uint8{0, 4, 7}
 
+// String chanel string
 func (i Channel) String() string {
-	if i < 0 || i >= Channel(len(_Channel_index)-1) {
+	if i < 0 || i >= Channel(len(channelIndex)-1) {
 		return "Channel(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Channel_name[_Channel_index[i]:_Channel_index[i+1]]
+	return channelName[channelIndex[i]:channelIndex[i+1]]
 }

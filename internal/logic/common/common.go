@@ -7,6 +7,7 @@ import (
 	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 )
 
+// SendToDapr send data by dapr
 func SendToDapr(ctx context.Context, bus *publish.Bus, data ...*event.OrgSpec) {
 	for k := range data {
 		message := new(publish.Message)

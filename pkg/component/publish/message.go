@@ -10,19 +10,24 @@ import (
 )
 
 //go:generate stringer -type Channel
+// Channel channel
 type Channel int
 
+// channel
 const (
 	None Channel = iota
 	Org
 )
 
+// Message message
 type Message struct {
 	event.Data `json:",omitempty"`
 }
 
+// SendResp send resp
 type SendResp struct{}
 
+// Bus bus
 type Bus struct {
 	daprClient daprd.Client
 	log        logger.AdaptedLogger
@@ -31,6 +36,7 @@ type Bus struct {
 	tenant     string
 }
 
+// New new
 func New(ctx context.Context, log logger.AdaptedLogger, opts ...Option) (*Bus, error) {
 	client, err := daprd.NewClient()
 	if err != nil {
@@ -47,8 +53,10 @@ func New(ctx context.Context, log logger.AdaptedLogger, opts ...Option) (*Bus, e
 	return bus, nil
 }
 
+// Option option
 type Option func(*Bus) error
 
+// WithPubsubName WithPubsubName
 func WithPubsubName(pubsubName string) Option {
 	return func(b *Bus) error {
 		b.pubsubName = pubsubName
@@ -56,6 +64,7 @@ func WithPubsubName(pubsubName string) Option {
 	}
 }
 
+// WithTenant WithTenant
 func WithTenant(tenant string) Option {
 	return func(b *Bus) error {
 		b.tenant = tenant
@@ -63,6 +72,7 @@ func WithTenant(tenant string) Option {
 	}
 }
 
+// Send send
 func (b *Bus) Send(ctx context.Context, req *Message) (*SendResp, error) {
 	var topic string
 
@@ -90,6 +100,7 @@ func (b *Bus) publish(ctx context.Context, topic string, data interface{}) error
 	return nil
 }
 
+// Close Close
 func (b *Bus) Close() error {
 	b.daprClient.Close()
 	return nil
