@@ -67,6 +67,9 @@ func (b *Bus) Send(ctx context.Context, req *Message) (*SendResp, error) {
 	var topic string
 
 	if req.Data.OrgSpec != nil {
+		if b.tenant == "" {
+			b.tenant = "default"
+		}
 		topic = fmt.Sprintf("%s.%s", b.tenant, Org.String())
 		if err := b.publish(ctx, topic, req.Data); err != nil {
 			b.log.Error(err, "push org", "userID", req.Data)

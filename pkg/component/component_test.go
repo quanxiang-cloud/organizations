@@ -70,7 +70,7 @@ func TestPub(t *testing.T) {
 	ctx := context.Background()
 	log := logger.Logger
 	bus, err := publish.New(ctx, log,
-		publish.WithPubsubName("org-redis-pubsub"), publish.WithTenant("lowcode"),
+		publish.WithPubsubName("org-redis-pubsub"), publish.WithTenant(""),
 	)
 	if err != nil {
 		panic(err)

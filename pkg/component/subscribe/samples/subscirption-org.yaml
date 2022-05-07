@@ -3,7 +3,7 @@ kind: Subscription
 metadata:
   name: org-pubsub
 spec:
-  topic: lowcode.Org
+  topic: default.Org
   route: /user/relation
   pubsubname: org-redis-pubsub
 scopes:
