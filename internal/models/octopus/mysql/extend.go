@@ -29,6 +29,9 @@ func NewExtendRepo() octopus.ExtendRepo {
 }
 
 func (e *extendRepo) Insert(db, tx *gorm.DB, tableName string, r map[string]interface{}) error {
+	if tableName == "" {
+		tableName = "default"
+	}
 	if !checkTableExist(db, tableName) {
 		if err := createTable(db, tableName, &octopus.Extend{}); err != nil {
 			return err
@@ -43,6 +46,9 @@ func (e *extendRepo) InsertList(db, tx *gorm.DB, tableName string, r []map[strin
 }
 
 func (e *extendRepo) UpdateByID(db, tx *gorm.DB, tableName string, extend *octopus.Extend, r map[string]interface{}) (err error) {
+	if tableName == "" {
+		tableName = "default"
+	}
 	if !checkTableExist(db, tableName) {
 		if err := createTable(db, tableName, &octopus.Extend{}); err != nil {
 			return err
@@ -58,6 +64,9 @@ func (e *extendRepo) SelectList(db *gorm.DB, tableName string, status, page, lim
 }
 
 func (e *extendRepo) SelectByID(db *gorm.DB, tableName string, id string) (res map[string]interface{}) {
+	if tableName == "" {
+		tableName = "default"
+	}
 	db = db.Table(tableName).Where("id=?", id)
 	data := make(map[string]interface{})
 	affected := db.Find(&data).RowsAffected
@@ -68,6 +77,9 @@ func (e *extendRepo) SelectByID(db *gorm.DB, tableName string, id string) (res m
 }
 
 func (e *extendRepo) SelectByIDs(db *gorm.DB, tableName string, ids []string) (list []map[string]interface{}) {
+	if tableName == "" {
+		tableName = "default"
+	}
 	db = db.Table(tableName).Where("id in (?)", ids)
 	res := make([]map[string]interface{}, 0)
 	affected := db.Find(&res).RowsAffected
@@ -78,9 +90,15 @@ func (e *extendRepo) SelectByIDs(db *gorm.DB, tableName string, ids []string) (l
 }
 
 func checkTableExist(db *gorm.DB, tableName string) bool {
+	if tableName == "" {
+		tableName = "default"
+	}
 	return db.Migrator().HasTable(tableName)
 }
 func createTable(db *gorm.DB, tableName string, tb interface{}) error {
+	if tableName == "" {
+		tableName = "default"
+	}
 	return db.Table(tableName).Migrator().CreateTable(tb)
 }
 
@@ -92,6 +110,9 @@ func NewManageColumnRepo() octopus.ManageColumn {
 }
 
 func (e *extendRepo) AddColumns(db *gorm.DB, tableName, columnName string, types string, len int, pointLen int) error {
+	if tableName == "" {
+		tableName = "default"
+	}
 	var sql = "alter table `" + tableName + "`"
 	switch types {
 	case consts.STRING:
@@ -116,13 +137,22 @@ func (e *extendRepo) AddColumns(db *gorm.DB, tableName, columnName string, types
 }
 
 func (e *extendRepo) DropColumns(db *gorm.DB, tableName, columnName string) error {
+	if tableName == "" {
+		tableName = "default"
+	}
 	return db.Exec("alter table `" + tableName + "` drop column " + columnName).Error
 }
 
 func (e *extendRepo) CreateTable(db *gorm.DB, tableName string) error {
+	if tableName == "" {
+		tableName = "default"
+	}
 	return createTable(db, tableName, &octopus.Extend{})
 }
 
 func (e *extendRepo) CheckTableExist(db *gorm.DB, tableName string) bool {
+	if tableName == "" {
+		tableName = "default"
+	}
 	return checkTableExist(db, tableName)
 }

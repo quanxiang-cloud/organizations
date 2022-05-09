@@ -25,7 +25,6 @@ import (
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	"github.com/quanxiang-cloud/organizations/pkg/es"
 	"github.com/quanxiang-cloud/organizations/pkg/probe"
-	"github.com/quanxiang-cloud/organizations/pkg/util"
 	"github.com/quanxiang-cloud/organizations/pkg/verification"
 )
 
@@ -59,7 +58,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		panic(err)
 	}
 	{
-		probe := probe.New(util.LoggerFromContext(ctx))
+		probe := probe.New(log)
 		engine.GET("liveness", func(c *gin.Context) {
 			probe.LivenessProbe(c.Writer, c.Request)
 		})

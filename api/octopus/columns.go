@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/quanxiang-cloud/organizations/internal/logic/octopus/core"
 	"gorm.io/gorm"
 
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -41,8 +42,8 @@ func (co *Columns) Open(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	res, err := co.columns.Open(ginheader.MutateContext(c), r)
-	resp.Format(res, err).Context(c)
+	res, err := co.columns.Open(ginheader.MutateContext(c), r, c.Request)
+	core.DealResponse(c.Writer, res.Response)
 	return
 }
 
@@ -71,9 +72,7 @@ func (co *Columns) GetAll(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	r.R = c.Request
-	r.W = c.Writer
-	all, err := co.columns.GetAll(ginheader.MutateContext(c), r)
+	all, err := co.columns.GetAll(ginheader.MutateContext(c), r, c.Request, c.Writer)
 	resp.Format(all, err).Context(c)
 	return
 }
@@ -88,9 +87,8 @@ func (co *Columns) Update(c *gin.Context) {
 		return
 	}
 	r.UpdatedBy = profile.UserID
-	r.R = c.Request
-	r.W = c.Writer
-	res, err := co.columns.Update(ginheader.MutateContext(c), r)
+
+	res, err := co.columns.Update(ginheader.MutateContext(c), r, c.Request, c.Writer)
 	resp.Format(res, err).Context(c)
 	return
 }
