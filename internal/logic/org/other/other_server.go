@@ -539,7 +539,12 @@ func (u *othersServer) insertOrUpdateDep(c context.Context, oldDeps []org.Depart
 				}
 			} else {
 				d := &org.Department{}
-				d.ID = id2.ShortID(0)
+				if reqData[k].ID == "" {
+					d.ID = id2.ShortID(0)
+				} else {
+					d.ID = reqData[k].ID
+				}
+
 				d.PID = reqData[k].PID
 				d.SuperPID = supperID
 				d.Name = reqData[k].Name
