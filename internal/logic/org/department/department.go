@@ -56,6 +56,7 @@ const (
 	notExist  = -1
 )
 
+// attr type
 const (
 	ComType int = iota + 1
 	DepType
