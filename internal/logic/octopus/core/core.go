@@ -21,7 +21,7 @@ import (
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 )
 
-// Core core
+// Core publish
 type Core interface {
 }
 

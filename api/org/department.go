@@ -14,6 +14,7 @@ limitations under the License.
 */
 import (
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/user"
+	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"gorm.io/gorm"
 	"net/http"
 
@@ -38,13 +39,14 @@ type Department struct {
 	other  other.OthServer
 	log    logger.AdaptedLogger
 	search *user.Search
+	bus    *publish.Bus
 }
 
 // NewDepartmentAPI new
-func NewDepartmentAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger) Department {
+func NewDepartmentAPI(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient, log logger.AdaptedLogger, bus *publish.Bus) Department {
 	return Department{
 		dep:    department.NewDepartment(db),
-		other:  other.NewOtherServer(conf, db, redisClient),
+		other:  other.NewOtherServer(conf, db, redisClient, bus),
 		log:    log,
 		search: user.GetSearch(),
 	}
@@ -86,7 +88,9 @@ func (d *Department) UpdateDep(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
-	d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	if len(res.Users) > 0 {
+		d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	}
 	d.search.PushDep(ginheader.MutateContext(c), nil)
 	resp.Format(res, err).Context(c)
 	return
