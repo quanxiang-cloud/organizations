@@ -77,6 +77,11 @@ func (u userDepartmentRelationRepo) DeleteByUserIDAndDepID(tx *gorm.DB, userID, 
 	return tx.Model(org.UserDepartmentRelation{}).Where("user_id=? and dep_id=?", userID, depID).Delete(relation).Error
 }
 
+func (u userDepartmentRelationRepo) DeleteByDepIDAndUserIDs(tx *gorm.DB, depID string, userID ...string) error {
+	relation := &org.UserDepartmentRelation{}
+	return tx.Model(org.UserDepartmentRelation{}).Where("dep_id=? and user_id in (?)", depID, userID).Delete(relation).Error
+}
+
 //NewUserDepartmentRelationRepo new
 func NewUserDepartmentRelationRepo() org.UserDepartmentRelationRepo {
 	return new(userDepartmentRelationRepo)

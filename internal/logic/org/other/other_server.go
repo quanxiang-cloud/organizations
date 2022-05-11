@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/department"
 	"github.com/quanxiang-cloud/organizations/pkg/component/publish"
 	"gorm.io/gorm"
 
@@ -237,7 +238,7 @@ func (u *othersServer) GetUserByIDs(c context.Context, rq *GetUserByIDsRequest) 
 		for k := range relations {
 			userDep[relations[k].UserID] = append(userDep[relations[k].UserID], relations[k].DepID)
 		}
-		depList, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+		depList, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range depList {
 			depMap[depList[k].ID] = &depList[k]
@@ -479,7 +480,7 @@ func (u *othersServer) dealUserLeaderRelation(c context.Context, tx *gorm.DB, us
 }
 
 func (u *othersServer) addDEP(c context.Context, reqData []AddDep, isUpdate int, profile header2.Profile) (map[int]*Result, error) {
-	supper := u.depRepo.SelectSupper(c, u.DB)
+	supper := u.depRepo.SelectSupper(c, u.DB, []int{department.ComType, department.DepType})
 	var supperID = ""
 	if supper != nil {
 		supperID = supper.ID
@@ -498,13 +499,13 @@ func (u *othersServer) addDEP(c context.Context, reqData []AddDep, isUpdate int,
 		}
 	}
 
-	oldDeps, _ := u.depRepo.PageList(c, u.DB, 0, 1, 100000)
+	oldDeps, _ := u.depRepo.PageList(c, u.DB, 0, 1, 100000, []int{department.ComType, department.DepType})
 
 	res, err := u.insertOrUpdateDep(c, oldDeps, reqData, supperID, profile)
 	if err != nil {
 		return nil, err
 	}
-	all, _ := u.depRepo.PageList(c, u.DB, 1, 1, 100000)
+	all, _ := u.depRepo.PageList(c, u.DB, 1, 1, 100000, []int{department.ComType, department.DepType})
 	makeDepGrade(supperID, all, consts.FirsGrade)
 	for k := range all {
 		u.depRepo.Update(c, u.DB, &all[k])
@@ -647,8 +648,8 @@ func (u *othersServer) GetOneUser(c context.Context, r *GetOneRequest) (*GetOneR
 			for _, v := range relations {
 				depIDs = append(depIDs, v.DepID)
 			}
-			departments := u.depRepo.List(c, u.DB, depIDs...)
-			depList, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+			departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
+			depList, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 			depMap := make(map[string]*org.Department)
 			for k := range depList {
 				depMap[depList[k].ID] = &depList[k]
@@ -680,7 +681,7 @@ type DepAllDepsResp struct {
 // GetAllDeps  get all department
 func (u *othersServer) GetAllDeps(c context.Context, r *DepAllRequest) (res *DepAllDepsResp, err error) {
 
-	list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 1000)
+	list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 1000, []int{department.ComType, department.DepType})
 	resData := &DepAllDepsResp{}
 	for k := range list {
 		add := user.DepOneResponse{}
@@ -717,7 +718,7 @@ func (u *othersServer) GetAllUsers(c context.Context, r *UserAllRequest) (res *U
 		for k := range relations {
 			userDep[relations[k].UserID] = append(userDep[relations[k].UserID], relations[k].DepID)
 		}
-		departments, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 1000)
+		departments, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 1000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range departments {
 			depMap[departments[k].ID] = &departments[k]
@@ -781,7 +782,7 @@ func (u *othersServer) OtherGetUsersByDepID(c context.Context, r *GetUsersByDepI
 		userIDs = append(userIDs, relation[k].UserID)
 	}
 	if r.IsIncludeChild == includeChildDep {
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string][]org.Department)
 		for k := range list {
 			depMap[list[k].PID] = append(depMap[list[k].PID], list[k])
