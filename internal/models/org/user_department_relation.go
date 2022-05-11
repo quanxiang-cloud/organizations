@@ -38,4 +38,5 @@ type UserDepartmentRelationRepo interface {
 	SelectByUserIDs(db *gorm.DB, userID ...string) []UserDepartmentRelation
 	SelectByUserIDAndDepID(db *gorm.DB, userID, depID string) *UserDepartmentRelation
 	DeleteByUserIDAndDepID(db *gorm.DB, userID, depID string) error
+	DeleteByDepIDAndUserIDs(db *gorm.DB, depID string, userID ...string) error
 }

@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/department"
 	"github.com/quanxiang-cloud/organizations/pkg/component/event"
 	"net/http"
 	"strings"
@@ -60,6 +61,7 @@ type User interface {
 	IndexCount(c context.Context, r *IndexCountRequest) (*IndexCountResponse, error)
 	Register(c context.Context, r *RegisterRequest) (*RegisterResponse, error)
 	GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUsersByIDsResponse, error)
+	GroupUserSet(c context.Context, r *GroupUserSetRequest) (*GroupUserSetResponse, error)
 }
 
 type user struct {
@@ -701,7 +703,7 @@ func (u *user) AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*Sea
 		resUser.JobNumber = old.JobNumber
 		resUser.Gender = old.Gender
 		//从当前部门一直找到顶层部门组装
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range list {
 			depMap[list[k].ID] = &list[k]
@@ -711,7 +713,7 @@ func (u *user) AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*Sea
 		for k := range departmentRelations {
 			depIDs = append(depIDs, departmentRelations[k].DepID)
 		}
-		departments := u.depRepo.List(c, u.DB, depIDs...)
+		departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
 
 		if len(departments) > 0 {
 			for k := range departments {
@@ -783,7 +785,7 @@ func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) 
 		} else {
 			resUser.Status = ((resUser.Status >> 1) << 1) + 1
 		}
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range list {
 			depMap[list[k].ID] = &list[k]
@@ -793,7 +795,7 @@ func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) 
 		for k := range departmentRelations {
 			depIDs = append(depIDs, departmentRelations[k].DepID)
 		}
-		departments := u.depRepo.List(c, u.DB, depIDs...)
+		departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
 		if len(departments) > 0 {
 			for k := range departments {
 				responses := make([]DepOneResponse, 0)
@@ -1162,7 +1164,7 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 
 		c = header2.SetContext(c, TenantID, old.TenantID)
 
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000)
+		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range list {
 			depMap[list[k].ID] = &list[k]
@@ -1172,7 +1174,7 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 		for k := range departmentRelations {
 			depIDs = append(depIDs, departmentRelations[k].DepID)
 		}
-		departments := u.depRepo.List(c, u.DB, depIDs...)
+		departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
 
 		if len(departments) > 0 {
 			for k := range departments {
@@ -1525,7 +1527,7 @@ func (u *user) GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUs
 		ud[relations[k].UserID] = append(ud[relations[k].UserID], relations[k].DepID)
 		depIDs = append(depIDs, relations[k].DepID)
 	}
-	departments := u.depRepo.List(c, u.DB, depIDs...)
+	departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
 	depMap := make(map[string]org.Department)
 	for k := range departments {
 		depMap[departments[k].ID] = departments[k]
@@ -1545,4 +1547,85 @@ func (u *user) GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUs
 		}
 	}
 	return response, nil
+}
+
+// GroupUserSetRequest set user group relation
+type GroupUserSetRequest struct {
+	GroupID  string   `json:"groupID"`
+	Attr     string   `json:"attr,omitempty" `
+	AddUsers []string `json:"addUsers"`
+	DelUsers []string `json:"delUsers"`
+}
+
+// GroupUserSetResponse update response
+type GroupUserSetResponse struct {
+	Users []*org.User      `json:"-"`
+	Spec  []*event.OrgSpec `json:"-"`
+}
+
+// GroupUserSet set group user relation
+func (u *user) GroupUserSet(c context.Context, r *GroupUserSetRequest) (*GroupUserSetResponse, error) {
+	oldRelations := u.userDepRepo.SelectByDEPID(u.DB, r.GroupID)
+	tx := u.DB.Begin()
+	resp := &GroupUserSetResponse{}
+	userIDs := make([]string, 0)
+	if len(r.DelUsers) > 0 {
+		err := u.userDepRepo.DeleteByDepIDAndUserIDs(tx, r.GroupID, r.DelUsers...)
+		if err != nil {
+			return nil, err
+		}
+		for k := range r.DelUsers {
+			orgRelation := &event.OrgSpec{}
+			orgRelation.UserID = r.DelUsers[k]
+			orgRelation.Action = event.ActionDel
+			orgRelation.SourceID = r.GroupID
+			resp.Spec = append(resp.Spec, orgRelation)
+		}
+		userIDs = append(userIDs, r.DelUsers...)
+	}
+
+	if len(r.AddUsers) > 0 {
+		ud := make(map[string]string)
+		for k := range oldRelations {
+			ud[oldRelations[k].UserID] = oldRelations[k].UserID
+		}
+		adds := make([]string, 0)
+		if len(ud) > 0 {
+			for k := range r.AddUsers {
+				if v, ok := ud[r.AddUsers[k]]; !ok || v == "" {
+					adds = append(adds, r.AddUsers[k])
+				}
+			}
+		} else {
+			adds = append(adds, r.AddUsers...)
+		}
+
+		relations := make([]org.UserDepartmentRelation, 0, len(adds))
+		for k := range adds {
+			relation := org.UserDepartmentRelation{
+				ID:     id2.ShortID(0),
+				UserID: adds[k],
+				DepID:  r.GroupID,
+				Attr:   r.Attr,
+			}
+			relations = append(relations, relation)
+			orgRelation := &event.OrgSpec{}
+			orgRelation.UserID = adds[k]
+			orgRelation.Action = event.ActionAdd
+			orgRelation.SourceID = r.GroupID
+			resp.Spec = append(resp.Spec, orgRelation)
+		}
+		if len(relations) > 0 {
+			err := u.userDepRepo.InsertBranch(tx, relations...)
+			if err != nil {
+				return nil, err
+			}
+		}
+		userIDs = append(userIDs, r.AddUsers...)
+	}
+	tx.Commit()
+
+	list := u.userRepo.List(c, u.DB, userIDs...)
+	resp.Users = list
+	return resp, nil
 }

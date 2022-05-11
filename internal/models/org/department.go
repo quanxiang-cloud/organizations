@@ -23,7 +23,7 @@ type Department struct {
 	ID        string `gorm:"column:id;type:varchar(64);PRIMARY_KEY" json:"id"`
 	Name      string `gorm:"column:name;type:varchar(64);" json:"name"`
 	UseStatus int    `gorm:"column:use_status; " json:"useStatus"`               //1正常，-1真删除，-2禁用
-	Attr      int    `gorm:"column:attr; " json:"attr"`                          //1公司，2部门
+	Attr      int    `gorm:"column:attr; " json:"attr"`                          //1公司，2部门，3组织
 	PID       string `gorm:"column:pid;type:varchar(64); " json:"pid"`           //上层ID
 	SuperPID  string `gorm:"column:super_pid;type:varchar(64); " json:"superId"` //最顶层父级ID
 	Grade     int    `gorm:"column:grade" form:"grade" json:"grade"`             //部门等级
@@ -47,13 +47,13 @@ type DepartmentRepo interface {
 	InsertBranch(tx *gorm.DB, req ...Department) error
 	Update(ctx context.Context, tx *gorm.DB, req *Department) (err error)
 	Delete(ctx context.Context, tx *gorm.DB, id ...string) (err error)
-	List(ctx context.Context, db *gorm.DB, id ...string) (list []Department)
-	PageList(ctx context.Context, db *gorm.DB, status, page, limit int) (list []Department, total int64)
+	List(ctx context.Context, db *gorm.DB, attr []int, id ...string) (list []Department)
+	PageList(ctx context.Context, db *gorm.DB, status, page, limit int, attr []int) (list []Department, total int64)
 	Get(ctx context.Context, db *gorm.DB, id string) (res *Department)
 	SelectByPID(ctx context.Context, db *gorm.DB, pid string, status, page, limit int) (list []Department, total int64)
 	SelectByPIDAndName(ctx context.Context, db *gorm.DB, pid, name string) (one *Department)
 	SelectByPIDs(ctx context.Context, db *gorm.DB, status int, pid ...string) (one []Department)
-	SelectSupper(ctx context.Context, db *gorm.DB) *Department
+	SelectSupper(ctx context.Context, db *gorm.DB, attr []int) *Department
 	Count(ctx context.Context, db *gorm.DB, status int) int64
 	GetMaxGrade(ctx context.Context, db *gorm.DB) int64
 }

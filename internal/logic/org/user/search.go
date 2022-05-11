@@ -15,6 +15,7 @@ limitations under the License.
 import (
 	"context"
 	"errors"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/department"
 
 	"gorm.io/gorm"
 
@@ -115,7 +116,7 @@ func (s *Search) PushDep(ctx context.Context, sig chan int) {
 }
 
 func (s *Search) pushDepToSearch(dep *SearchDepartment) {
-	list, _ := s.depRepo.PageList(dep.Ctx, s.db, 1, 1, 10000)
+	list, _ := s.depRepo.PageList(dep.Ctx, s.db, 1, 1, 10000, []int{department.ComType, department.DepType, department.GroupType})
 	if len(list) > 0 {
 		departments := new(es.SearchDepartment)
 		departments.Ctx = dep.Ctx
@@ -124,6 +125,7 @@ func (s *Search) pushDepToSearch(dep *SearchDepartment) {
 			department.ID = list[k].ID
 			department.PID = list[k].PID
 			department.Name = list[k].Name
+			department.Attr = list[k].Attr
 			department.TenantID = list[k].TenantID
 			departments.Deps = append(departments.Deps, department)
 		}
@@ -139,7 +141,7 @@ func (s *Search) pushDepToSearch(dep *SearchDepartment) {
 func (s *Search) pushUserToSearch(user *SearchUser) {
 	search := es.GetSearch()
 
-	allDeps, _ := s.depRepo.PageList(user.Ctx, s.db, 1, 1, 10000)
+	allDeps, _ := s.depRepo.PageList(user.Ctx, s.db, 1, 1, 10000, []int{department.ComType, department.DepType, department.GroupType})
 	depMap := make(map[string]*org.Department)
 	for k := range allDeps {
 		depMap[allDeps[k].ID] = &allDeps[k]
@@ -173,7 +175,7 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 				department.ID = dep.ID
 				department.Name = dep.Name
 				department.PID = dep.PID
-				department.Attr = v1.Attr
+				department.Attr = dep.Attr
 				departments.Deps = append(departments.Deps, department)
 
 				depss := s.getDepToTop(dep.PID, departments.Deps, depMap)
@@ -203,6 +205,7 @@ func (s *Search) getDepToTop(depPID string, deps []v1alpha1.Department, depMap m
 		department.ID = dep.ID
 		department.Name = dep.Name
 		department.PID = dep.PID
+		department.Attr = dep.Attr
 		deps = append(deps, department)
 		if dep.PID != "" {
 			return s.getDepToTop(dep.PID, deps, depMap)

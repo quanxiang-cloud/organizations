@@ -87,6 +87,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		manageUser.GET("/info", userAPI.AdminUserInfo)
 		manageUser.PUT("/change/dep", userAPI.AdminChangeUsersDEP)
 		manageUser.GET("/index/count", userAPI.IndexCount)
+		manageUser.PUT("/group/set", userAPI.UserGroupSet)
 
 	}
 	accountAPI := NewAccountAPI(c, db, redisClient, log)
@@ -126,6 +127,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		manageDep.PUT("/update", depAPI.UpdateDep)
 		manageDep.GET("/tree", depAPI.DEPTree)
 		manageDep.GET("/list", depAPI.PageList)
+		manageDep.GET("/group/list", depAPI.GroupPageList)
 		manageDep.GET("/info", depAPI.SelectDepByIDAdmin)
 		manageDep.GET("/pid", depAPI.SelectDepByPIDAdmin)
 		manageDep.PUT("/set/leader", depAPI.SetDEPLeader)

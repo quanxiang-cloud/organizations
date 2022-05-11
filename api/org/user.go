@@ -388,3 +388,30 @@ func (u *UserAPI) GetUsersByIDs(c *gin.Context) {
 	res, err := u.user.GetUsersByIDs(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 }
+
+// UserGroupSet UserGroupSet
+func (u *UserAPI) UserGroupSet(c *gin.Context) {
+	r := new(user.GroupUserSetRequest)
+	err := c.ShouldBind(r)
+	if err != nil {
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+
+	res, err := u.user.GroupUserSet(ginheader.MutateContext(c), r)
+	if err != nil {
+		resp.Format(nil, err).Context(c)
+		return
+	}
+
+	if len(res.Users) > 0 {
+		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+
+	}
+	//if len(res.Spec) > 0 {
+	//	common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
+	//}
+
+	resp.Format(res, nil).Context(c)
+	return
+}

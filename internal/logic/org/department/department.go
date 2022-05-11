@@ -30,6 +30,7 @@ import (
 type Department interface {
 	UserSelectByCondition(c context.Context, r *ViewerSearchListRequest) (*page.Page, error)
 	PageList(c context.Context, r *AdminSearchListRequest) (*page.Page, error)
+	GroupPageList(c context.Context, r *AdminSearchGroupListRequest) (*page.Page, error)
 	UserSelectByID(c context.Context, r *SearchOneRequest) (*ViewerDepartmentResponse, error)
 	AdminSelectByID(c context.Context, r *SearchOneRequest) (*AdminDepartmentResponse, error)
 	UserSelectByPID(c context.Context, r *SearchListByPIDRequest) (*page.Page, error)
@@ -49,12 +50,16 @@ type Department interface {
 }
 
 const (
-	allStatus  = 0
-	firsGrade  = 1
-	exist      = 1
-	notExist   = -1
-	depAttrDEP = 2
-	depAttrCOM = 1
+	allStatus = 0
+	firsGrade = 1
+	exist     = 1
+	notExist  = -1
+)
+
+const (
+	ComType int = iota + 1
+	DepType
+	GroupType
 )
 
 // department
@@ -206,7 +211,7 @@ type AddRequest struct {
 	PID       string `json:"pid" binding:"max=64"`
 	CreatBy   string `json:"-" binding:"-"`
 	//1:company,2:department
-	Attr int `json:"attr"`
+	Attr int `json:"attr" binding:"required"`
 }
 
 // AddResponse add response
@@ -216,10 +221,16 @@ type AddResponse struct {
 
 // Add add
 func (d *department) Add(c context.Context, r *AddRequest) (res *AddResponse, err error) {
-	if r.PID == "" {
-		supper := d.depRepo.SelectSupper(c, d.DB)
+	if r.PID == "" && r.Attr != GroupType {
+		supper := d.depRepo.SelectSupper(c, d.DB, []int{ComType, DepType})
 		if supper != nil {
 			return nil, error2.New(code.TopDepExist)
+		}
+	}
+	if r.Attr == GroupType {
+		selectByPIDAndName := d.depRepo.SelectByPIDAndName(c, d.DB, r.PID, r.Name)
+		if selectByPIDAndName != nil {
+			return nil, error2.New(code.NameUsed)
 		}
 	}
 	one := d.depRepo.SelectByPIDAndName(c, d.DB, r.PID, r.Name)
@@ -240,7 +251,7 @@ func (d *department) Add(c context.Context, r *AddRequest) (res *AddResponse, er
 		CreatedBy: r.CreatBy,
 	}
 	if r.Attr == 0 {
-		insertData.Attr = depAttrDEP
+		insertData.Attr = DepType
 	} else {
 		insertData.Attr = r.Attr
 	}
@@ -271,7 +282,7 @@ type UpdateRequest struct {
 	Name      string `json:"name"`
 	UseStatus int    `json:"useStatus" binding:"-"`
 	//1:company,2:department
-	Attr     int    `json:"attr"`
+	Attr     int    `json:"attr" binding:"required"`
 	PID      string `json:"pid" binding:"max=64"`
 	UpdateBy string `json:"updateBy"`
 }
@@ -405,7 +416,7 @@ type ViewerDepartmentResponse struct {
 
 // UserSelectByCondition user select by condition
 func (d *department) UserSelectByCondition(c context.Context, r *ViewerSearchListRequest) (*page.Page, error) {
-	list, total := d.depRepo.PageList(c, d.DB, consts.NormalStatus, r.Page, r.Limit)
+	list, total := d.depRepo.PageList(c, d.DB, consts.NormalStatus, r.Page, r.Limit, []int{ComType, DepType})
 	page := page.Page{}
 	if len(list) > 0 {
 		res := make([]ViewerDepartmentResponse, 0)
@@ -455,7 +466,7 @@ type AdminDepartmentResponse struct {
 
 // PageList page list
 func (d *department) PageList(c context.Context, r *AdminSearchListRequest) (*page.Page, error) {
-	list, total := d.depRepo.PageList(c, d.DB, r.UseStatus, r.Page, r.Limit)
+	list, total := d.depRepo.PageList(c, d.DB, r.UseStatus, r.Page, r.Limit, []int{ComType, DepType})
 	page := page.Page{}
 	if len(list) > 0 {
 		res := make([]AdminDepartmentResponse, 0)
@@ -467,6 +478,52 @@ func (d *department) PageList(c context.Context, r *AdminSearchListRequest) (*pa
 			re.UseStatus = list[k].UseStatus
 			re.SuperPID = list[k].SuperPID
 			re.Grade = list[k].Grade
+			re.CreateAt = list[k].CreatedAt
+			re.UpdateAt = list[k].UpdatedAt
+			re.CreateBy = list[k].CreatedBy
+			re.UpdateBy = list[k].UpdatedBy
+			re.Attr = list[k].Attr
+			res = append(res, re)
+		}
+		page.Data = res
+		page.TotalCount = total
+		return &page, nil
+	}
+	return &page, nil
+
+}
+
+// AdminSearchGroupListRequest admin get list request
+type AdminSearchGroupListRequest struct {
+	PID       string `json:"pid" form:"pid"  binding:"max=64"`
+	SuperPID  string `json:"superPID" form:"superPID" binding:"max=64"`
+	UseStatus int    `json:"useStatus" form:"useStatus" binding:"-"`
+	Page      int    `json:"page" form:"page" binding:"-"`
+	Limit     int    `json:"limit" form:"limit" binding:"-"`
+}
+
+// AdminGroupResponse admin get list response
+type AdminGroupResponse struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	CreateAt int64  `json:"createAt,omitempty"`
+	UpdateAt int64  `json:"updateAt,omitempty"`
+	CreateBy string `json:"creatBy,omitempty"`
+	UpdateBy string `json:"updateBy,omitempty"`
+	//1:company,2:department,3:group
+	Attr int `json:"attr"`
+}
+
+// GroupPageList page list
+func (d *department) GroupPageList(c context.Context, r *AdminSearchGroupListRequest) (*page.Page, error) {
+	list, total := d.depRepo.PageList(c, d.DB, r.UseStatus, r.Page, r.Limit, []int{GroupType})
+	page := page.Page{}
+	if len(list) > 0 {
+		res := make([]AdminGroupResponse, 0)
+		for k := range list {
+			re := AdminGroupResponse{}
+			re.ID = list[k].ID
+			re.Name = list[k].Name
 			re.CreateAt = list[k].CreatedAt
 			re.UpdateAt = list[k].UpdatedAt
 			re.CreateBy = list[k].CreatedBy
@@ -641,7 +698,7 @@ type TreeResponse struct {
 
 // Tree get department tree
 func (d *department) Tree(c context.Context, r *TreeRequest) (*TreeResponse, error) {
-	all, _ := d.depRepo.PageList(c, d.DB, consts.NormalStatus, 1, 10000)
+	all, _ := d.depRepo.PageList(c, d.DB, consts.NormalStatus, 1, 10000, []int{ComType, DepType})
 	departments := make([]TreeResponse, 0)
 	for k := range all {
 		res := TreeResponse{}
@@ -693,7 +750,7 @@ type GetByIDsResponse struct {
 
 //GetDepByIDs get by ids
 func (d *department) GetDepByIDs(c context.Context, r *GetByIDsRequest) (*GetByIDsResponse, error) {
-	list := d.depRepo.List(c, d.DB, r.IDs...)
+	list := d.depRepo.List(c, d.DB, []int{ComType, DepType}, r.IDs...)
 	if len(list) > 0 {
 		res := &GetByIDsResponse{}
 		for k := range list {
@@ -785,7 +842,7 @@ type GetDepsByIDsResponse struct {
 
 // GetDepsByIDs get dep by ids
 func (d *department) GetDepsByIDs(c context.Context, r *GetDepsByIDsRequest) (*GetDepsByIDsResponse, error) {
-	list := d.depRepo.List(c, d.DB, r.IDs...)
+	list := d.depRepo.List(c, d.DB, []int{ComType, DepType}, r.IDs...)
 	if len(list) == 0 {
 		return nil, nil
 	}

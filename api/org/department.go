@@ -111,6 +111,21 @@ func (d *Department) PageList(c *gin.Context) {
 	return
 }
 
+//GroupPageList page select
+func (d *Department) GroupPageList(c *gin.Context) {
+	r := new(department.AdminSearchGroupListRequest)
+	err := c.ShouldBind(r)
+	if err != nil {
+		logger.Logger.Errorw(err.Error(), ginlogger.GetRequestID(c))
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+
+	res, err := d.dep.GroupPageList(ginheader.MutateContext(c), r)
+	resp.Format(res, err).Context(c)
+	return
+}
+
 //SelectDepByConditionUser condition select
 func (d *Department) SelectDepByConditionUser(c *gin.Context) {
 	r := new(department.ViewerSearchListRequest)

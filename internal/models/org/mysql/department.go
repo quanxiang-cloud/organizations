@@ -58,13 +58,14 @@ func (d *departmentRepo) Delete(ctx context.Context, tx *gorm.DB, id ...string) 
 	return err
 }
 
-func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (list []org.Department) {
+func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, attr []int, id ...string) (list []org.Department) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
 		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
+	db = db.Where("attr in (?)", attr)
 	db = db.Where("id in (?)", id)
 
 	db = db.Order("updated_at desc")
@@ -77,7 +78,7 @@ func (d *departmentRepo) List(ctx context.Context, db *gorm.DB, id ...string) (l
 	return nil
 }
 
-func (d *departmentRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int) (list []org.Department, total int64) {
+func (d *departmentRepo) PageList(ctx context.Context, db *gorm.DB, status, page, limit int, attr []int) (list []org.Department, total int64) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
 		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
@@ -87,6 +88,7 @@ func (d *departmentRepo) PageList(ctx context.Context, db *gorm.DB, status, page
 	if status != 0 {
 		db = db.Where("use_status=?", status)
 	}
+	db = db.Where("attr in (?)", attr)
 	db = db.Order("updated_at desc")
 	departments := make([]org.Department, 0)
 	var num int64
@@ -174,7 +176,7 @@ func (d *departmentRepo) SelectByPIDAndName(ctx context.Context, db *gorm.DB, pi
 	return nil
 }
 
-func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Department {
+func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB, attr []int) *org.Department {
 	res := org.Department{}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
@@ -182,6 +184,7 @@ func (d *departmentRepo) SelectSupper(ctx context.Context, db *gorm.DB) *org.Dep
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
+	db = db.Where("attr in (?)", attr)
 	db = db.Where("(pid='' or pid is null) and use_status=1")
 	affected := db.Find(&res).RowsAffected
 	if affected == 1 {
