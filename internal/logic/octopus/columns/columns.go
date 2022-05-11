@@ -29,18 +29,20 @@ import (
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/consts"
 	oct "github.com/quanxiang-cloud/organizations/internal/models/octopus"
 	mysql3 "github.com/quanxiang-cloud/organizations/internal/models/octopus/mysql"
+	org "github.com/quanxiang-cloud/organizations/internal/models/org"
+	mysqlOrg "github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
 	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 )
 
 // Columns columns interface
 type Columns interface {
-	GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllColumnsResponse, error)
-	Update(ctx context.Context, r *UpdateColumnRequest) (*UpdateColumnResponse, error)
+	GetAll(ctx context.Context, req *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error)
+	Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error)
 	Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error)
 	Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error)
-	Drop(ctx context.Context, r *DropColumnRequest) (*DropColumnResponse, error)
-	Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnResponse, error)
+	Drop(ctx context.Context, req *DropColumnRequest, r *http.Request) (*DropColumnResponse, error)
+	Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error)
 }
 
 const (
@@ -50,25 +52,27 @@ const (
 
 // Columns column
 type columns struct {
-	DB               *gorm.DB
-	manageColumnRepo oct.ManageColumn
-	useColumnsRepo   oct.UseColumnsRepo
-	tableColumnsRepo oct.UserTableColumnsRepo
-	redisClient      redis.UniversalClient
-	conf             configs.Config
-	client           http.Client
+	DB                  *gorm.DB
+	manageColumnRepo    oct.ManageColumn
+	useColumnsRepo      oct.UseColumnsRepo
+	tableColumnsRepo    oct.UserTableColumnsRepo
+	orgTableColumnsRepo org.UserTableColumnsRepo
+	redisClient         redis.UniversalClient
+	conf                configs.Config
+	client              http.Client
 }
 
 // NewColumns new
 func NewColumns(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) Columns {
 	return &columns{
-		DB:               db,
-		redisClient:      redisClient,
-		manageColumnRepo: mysql3.NewManageColumnRepo(),
-		useColumnsRepo:   mysql3.NewUseColumnsRepo(),
-		tableColumnsRepo: mysql3.NewUserTableColumnsRepo(),
-		conf:             conf,
-		client:           client.New(conf.InternalNet),
+		DB:                  db,
+		redisClient:         redisClient,
+		manageColumnRepo:    mysql3.NewManageColumnRepo(),
+		useColumnsRepo:      mysql3.NewUseColumnsRepo(),
+		tableColumnsRepo:    mysql3.NewUserTableColumnsRepo(),
+		orgTableColumnsRepo: mysqlOrg.NewUserTableColumnsRepo(),
+		conf:                conf,
+		client:              client.New(conf.InternalNet),
 	}
 }
 
@@ -79,35 +83,39 @@ type UpdateColumnRequest struct {
 	TenantID  string `json:"tenantID"`
 	Format    string `json:"format"`
 	UpdatedBy string
-	R         *http.Request
-	W         http.ResponseWriter
 }
 
 // UpdateColumnResponse update column name
 type UpdateColumnResponse struct {
+	Response *http.Response
 }
 
 // Update update columns alias name
-func (c *columns) Update(ctx context.Context, r *UpdateColumnRequest) (*UpdateColumnResponse, error) {
-	old := c.tableColumnsRepo.SelectByID(ctx, c.DB, r.ID)
+func (c *columns) Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error) {
+	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, req.Name)
+	if getByName != nil && getByName.ID != req.ID {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+
+	old := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
 	if old == nil {
-		response, err := core.DealRequest(c.client, c.conf.OrgHost, r.R, r)
+		response, err := core.DealRequest(c.client, c.conf.OrgHost, r, req)
 		if err != nil {
 			return nil, err
 		}
-		core.DealResponse(r.W, response)
+		core.DealResponse(w, response)
 		return nil, nil
 	}
-	res := c.tableColumnsRepo.SelectByIDAndName(ctx, c.DB, r.ID, r.Name)
-	if res != nil {
-		return nil, error2.New(code.ColumnExist)
+	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
+	if res == nil {
+		return nil, error2.New(code.DataNotExist)
 	}
 	tableColumns := oct.UserTableColumns{}
-	tableColumns.ID = r.ID
-	tableColumns.Name = r.Name
+	tableColumns.ID = req.ID
+	tableColumns.Name = req.Name
 	tableColumns.UpdatedAt = time.NowUnix()
-	tableColumns.UpdatedBy = r.UpdatedBy
-	tableColumns.Format = r.Format
+	tableColumns.UpdatedBy = req.UpdatedBy
+	tableColumns.Format = req.Format
 	tx := c.DB.Begin()
 	err := c.tableColumnsRepo.Update(ctx, tx, &tableColumns)
 	if err != nil {
@@ -137,6 +145,23 @@ type AddColumnResponse struct {
 
 // Add add self columns
 func (c *columns) Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error) {
+	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, r.Name)
+	if getByName != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByColumnName := c.tableColumnsRepo.GetByColumnName(ctx, c.DB, r.ColumnName)
+	if getByColumnName != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByNameOrg := c.orgTableColumnsRepo.GetByName(ctx, c.DB, r.Name)
+	if getByNameOrg != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByColumnNameOrg := c.orgTableColumnsRepo.GetByColumnName(ctx, c.DB, r.ColumnName)
+	if getByColumnNameOrg != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+
 	tableColumns := oct.UserTableColumns{}
 	tableColumns.ID = id.HexUUID(true)
 	tableColumns.Name = r.Name
@@ -172,24 +197,24 @@ func (c *columns) Add(ctx context.Context, r *AddColumnRequest) (*AddColumnRespo
 // DropColumnRequest del column
 type DropColumnRequest struct {
 	ID string `json:"id"`
-	R  *http.Request
-	W  http.ResponseWriter
 }
 
 // DropColumnResponse del column
 type DropColumnResponse struct {
-	ID string `json:"id"`
+	ID       string         `json:"id"`
+	Response *http.Response `json:"-"`
 }
 
 // Drop del column
-func (c *columns) Drop(ctx context.Context, r *DropColumnRequest) (*DropColumnResponse, error) {
-	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, r.ID)
+func (c *columns) Drop(ctx context.Context, req *DropColumnRequest, r *http.Request) (*DropColumnResponse, error) {
+	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
+	dropResp := DropColumnResponse{}
 	if res == nil {
-		response, err := core.DealRequest(c.client, c.conf.OrgHost, r.R, r)
+		response, err := core.DealRequest(c.client, c.conf.OrgHost, r, req)
 		if err != nil {
 			return nil, err
 		}
-		core.DealResponse(r.W, response)
+		dropResp.Response = response
 		return nil, nil
 	}
 	if res.Attr == consts.SystemAttr {
@@ -202,7 +227,7 @@ func (c *columns) Drop(ctx context.Context, r *DropColumnRequest) (*DropColumnRe
 		return nil, err
 	}
 	tableColumns := &oct.UserTableColumns{}
-	tableColumns.ID = r.ID
+	tableColumns.ID = req.ID
 	tableColumns.DeletedAt = time.NowUnix()
 	tableColumns.Status = consts.DelStatus
 	err = c.tableColumnsRepo.Update(ctx, tx, tableColumns)
@@ -218,8 +243,6 @@ func (c *columns) Drop(ctx context.Context, r *DropColumnRequest) (*DropColumnRe
 // GetAllColumnsRequest user table all column request
 type GetAllColumnsRequest struct {
 	Status int `json:"status" form:"status"`
-	R      *http.Request
-	W      http.ResponseWriter
 }
 
 // GetAllColumnsResponse user table all column response
@@ -243,8 +266,8 @@ type ColumnResponse struct {
 }
 
 // GetAll get all column
-func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest) (*GetAllColumnsResponse, error) {
-	response, err := core.DealRequest(c.client, c.conf.OrgHost, data.R, data)
+func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error) {
+	response, err := core.DealRequest(c.client, c.conf.OrgHost, r, data)
 	if err != nil {
 		return nil, err
 	}
@@ -388,25 +411,39 @@ type OpenColumnRequest struct {
 
 // OpenColumnResponse resp
 type OpenColumnResponse struct {
+	Response *http.Response
 }
 
 // Open open colum field
-func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnResponse, error) {
+func (c *columns) Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error) {
 	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0)
 	if total > 0 {
 		return nil, error2.New(code.ErrFieldColumnUsed)
+	}
+	response, err := core.DealRequest(c.client, c.conf.OrgHost, r, req)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := core.DeserializationResp(ctx, response, nil)
+	if err != nil {
+		return nil, err
+	}
+	openColumnResponse := &OpenColumnResponse{}
+	openColumnResponse.Response = response
+	if resp.Code != 0 {
+		return openColumnResponse, nil
 	}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if c.manageColumnRepo.CheckTableExist(c.DB, tenantID) {
 		return nil, error2.New(code.ErrFieldColumnUsed)
 	}
 	tx := c.DB.Begin()
-	err := c.manageColumnRepo.CreateTable(tx, tenantID)
+	err = c.manageColumnRepo.CreateTable(tx, tenantID)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 	tx.Commit()
 
-	return nil, nil
+	return openColumnResponse, nil
 }

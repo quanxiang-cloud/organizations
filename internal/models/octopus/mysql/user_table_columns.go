@@ -70,7 +70,7 @@ func (u *userTableColumnsRepo) Insert(ctx context.Context, tx *gorm.DB, req *oct
 }
 
 func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status int) (list []octopus.UserTableColumns, total int64) {
-	users := make([]octopus.UserTableColumns, 0)
+	cls := make([]octopus.UserTableColumns, 0)
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
@@ -82,9 +82,9 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 		db = db.Where("status = ?", status)
 	}
 	db.Model(&octopus.UserTableColumns{}).Count(&num)
-	affected := db.Find(&users).RowsAffected
+	affected := db.Find(&cls).RowsAffected
 	if affected > 0 {
-		return users, num
+		return cls, num
 	}
 	return nil, 0
 }
@@ -149,6 +149,46 @@ func (u *userTableColumnsRepo) GetXlsxField(ctx context.Context, db *gorm.DB, st
 
 		}
 		return fields
+	}
+	return nil
+}
+
+func (u *userTableColumnsRepo) GetByName(ctx context.Context, db *gorm.DB, name string) *octopus.UserTableColumns {
+	cls := &octopus.UserTableColumns{}
+	var num int64
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
+
+	db = db.Where("name = ?", name)
+
+	db.Model(&octopus.UserTableColumns{}).Count(&num)
+	affected := db.Find(&cls).RowsAffected
+	if affected > 0 {
+		return cls
+	}
+	return nil
+}
+
+func (u *userTableColumnsRepo) GetByColumnName(ctx context.Context, db *gorm.DB, columName string) *octopus.UserTableColumns {
+	cls := &octopus.UserTableColumns{}
+	var num int64
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+	if tenantID == "" {
+		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
+	} else {
+		db = db.Where("tenant_id=?", tenantID)
+	}
+
+	db = db.Where("columns_name=?", columName)
+
+	db.Model(&octopus.UserTableColumns{}).Count(&num)
+	affected := db.Find(&cls).RowsAffected
+	if affected > 0 {
+		return cls
 	}
 	return nil
 }

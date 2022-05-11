@@ -63,18 +63,24 @@ func DealRequest(c http.Client, host string, r *http.Request, data interface{}) 
 	request := r.Clone(r.Context())
 	parse, _ := url.ParseRequestURI(host)
 	request.URL = parse
-	request.Host = parse.Host
+	request.Host = host
 	request.URL.Path = r.URL.Path
 	request.RequestURI = ""
 
 	request.URL.RawQuery = r.URL.RawQuery
-	if r.Method != "GET" {
-		marshal, _ := json.Marshal(data)
-		l := len(marshal)
-		itoa := strconv.Itoa(l)
-		request.Header.Set("Content-Length", itoa)
-		request.ContentLength = int64(l)
-		request.Body = io.NopCloser(bytes.NewReader(marshal))
+	if r.Body != nil {
+		body, err := json.Marshal(data)
+		defer r.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if len(body) > 0 {
+			itoa := strconv.Itoa(len(body))
+			request.Header.Set("Content-Length", itoa)
+			request.ContentLength = int64(len(body))
+			request.Body = io.NopCloser(bytes.NewReader(body))
+		}
+
 	}
 
 	return c.Do(request)

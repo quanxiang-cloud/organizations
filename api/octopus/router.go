@@ -13,17 +13,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
+	"bytes"
 	"context"
-	"github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
-
 	"github.com/gin-gonic/gin"
+	client2 "github.com/quanxiang-cloud/cabin/tailormade/client"
+	"github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
+	"github.com/quanxiang-cloud/organizations/internal/logic/octopus/core"
+	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	ginlogger "github.com/quanxiang-cloud/cabin/tailormade/gin"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	"github.com/quanxiang-cloud/organizations/pkg/probe"
-	"github.com/quanxiang-cloud/organizations/pkg/util"
 	"github.com/quanxiang-cloud/organizations/pkg/verification"
 )
 
@@ -41,8 +45,12 @@ type Router struct {
 	engine *gin.Engine
 }
 
+var httpClient http.Client
+
 // NewRouter 开启路由
 func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) (*Router, error) {
+	httpClient = client2.New(c.InternalNet)
+
 	db, err := mysql.New(c.Mysql, log)
 	if err != nil {
 		return nil, err
@@ -53,7 +61,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 		return nil, err
 	}
 	{
-		probe := probe.New(util.LoggerFromContext(ctx))
+		probe := probe.New(log)
 		engine.GET("liveness", func(c *gin.Context) {
 			probe.LivenessProbe(c.Writer, c.Request)
 		})
@@ -75,17 +83,17 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 	{
 		manageUser.POST("/add", userAPI.Add)
 		manageUser.PUT("/update", userAPI.Update)
-		manageUser.POST("/list", redirect)
+		manageUser.POST("/list", forward(c, httpClient))
 		manageUser.GET("/template", userAPI.GetTemplateFile)
 		manageUser.GET("/info", userAPI.AdminUserInfo)
-		manageUser.PUT("/change/dep", redirect)
-		manageUser.GET("/index/count", redirect)
+		manageUser.PUT("/change/dep", forward(c, httpClient))
+		manageUser.GET("/index/count", forward(c, httpClient))
 
 	}
 
 	manageAccount := manage.Group("/account")
 	{
-		manageAccount.POST("/admin/reset", redirect)
+		manageAccount.POST("/admin/reset", forward(c, httpClient))
 	}
 
 	//---------------------------用户端用户信息-----------------------
@@ -93,47 +101,47 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 	viewerAccount := viewer.Group("/account")
 	{
 
-		viewerAccount.GET("/login/code", redirect)
-		viewerAccount.GET("/reset/code", redirect)
-		viewerAccount.GET("/forget/code", redirect)
-		viewerAccount.GET("/register/code", redirect)
-		viewerAccount.POST("/check", redirect)
-		viewerAccount.POST("/user/reset", redirect)
-		viewerAccount.POST("/user/forget", redirect)
-		viewerAccount.POST("/user/first/reset", redirect)
+		viewerAccount.GET("/login/code", forward(c, httpClient))
+		viewerAccount.GET("/reset/code", forward(c, httpClient))
+		viewerAccount.GET("/forget/code", forward(c, httpClient))
+		viewerAccount.GET("/register/code", forward(c, httpClient))
+		viewerAccount.POST("/check", forward(c, httpClient))
+		viewerAccount.POST("/user/reset", forward(c, httpClient))
+		viewerAccount.POST("/user/forget", forward(c, httpClient))
+		viewerAccount.POST("/user/first/reset", forward(c, httpClient))
 	}
 	viewerUser := viewer.Group("/user")
 	{
 
 		viewerUser.GET("/info", userAPI.UserUserInfo)
 		viewerUser.GET("/id", userAPI.UserGetInfo)
-		viewerUser.PUT("/update/avatar", redirect)
-		viewerUser.POST("/register", redirect)
-		viewerUser.POST("/ids", redirect)
+		viewerUser.PUT("/update/avatar", forward(c, httpClient))
+		viewerUser.POST("/register", forward(c, httpClient))
+		viewerUser.POST("/ids", forward(c, httpClient))
 	}
 
 	manageDep := manage.Group("/dep")
 	{
 
-		manageDep.POST("/add", redirect)
-		manageDep.PUT("/update", redirect)
-		manageDep.GET("/tree", redirect)
-		manageDep.GET("/list", redirect)
-		manageDep.GET("/info", redirect)
-		manageDep.GET("/pid", redirect)
-		manageDep.PUT("/set/leader", redirect)
-		manageDep.PUT("/cancel/leader", redirect)
-		manageDep.GET("/check", redirect)
+		manageDep.POST("/add", forward(c, httpClient))
+		manageDep.PUT("/update", forward(c, httpClient))
+		manageDep.GET("/tree", forward(c, httpClient))
+		manageDep.GET("/list", forward(c, httpClient))
+		manageDep.GET("/info", forward(c, httpClient))
+		manageDep.GET("/pid", forward(c, httpClient))
+		manageDep.PUT("/set/leader", forward(c, httpClient))
+		manageDep.PUT("/cancel/leader", forward(c, httpClient))
+		manageDep.GET("/check", forward(c, httpClient))
 
 	}
 
 	viewerDep := viewer.Group("/dep")
 	{
 
-		viewerDep.GET("/list", redirect)
-		viewerDep.GET("/info", redirect)
-		viewerDep.GET("/pid", redirect)
-		viewerDep.POST("/ids", redirect) //3
+		viewerDep.GET("/list", forward(c, httpClient))
+		viewerDep.GET("/info", forward(c, httpClient))
+		viewerDep.GET("/pid", forward(c, httpClient))
+		viewerDep.POST("/ids", forward(c, httpClient)) //3
 	}
 
 	columnAPI := NewColumnsAPI(c, db, nil, log)
@@ -150,19 +158,19 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 	oth := v1.Group("/o")
 	otherUser := oth.Group("/user")
 	{
-		otherUser.POST("/token", redirect)
-		otherUser.POST("/update/status", redirect)
-		otherUser.POST("/updates/status", redirect)
+		otherUser.POST("/info", forward(c, httpClient))
+		otherUser.POST("/update/status", forward(c, httpClient))
+		otherUser.POST("/updates/status", forward(c, httpClient))
 		otherUser.POST("/user/add", userAPI.OtherServerAddUser)
-		otherUser.POST("/department/add", redirect)
-		otherUser.POST("/ids", redirect)
-		otherUser.POST("/dep/id", redirect)
+		otherUser.POST("/department/add", forward(c, httpClient))
+		otherUser.POST("/ids", forward(c, httpClient))
+		otherUser.POST("/dep/id", forward(c, httpClient))
 	}
 	otherDep := oth.Group("/dep")
 	{
-		otherDep.POST("/ids", redirect)
-		otherDep.POST("/del", redirect)
-		otherDep.GET("/max/grade", redirect)
+		otherDep.POST("/ids", forward(c, httpClient))
+		otherDep.POST("/del", forward(c, httpClient))
+		otherDep.GET("/max/grade", forward(c, httpClient))
 	}
 	if err != nil {
 		panic(err)
@@ -193,6 +201,41 @@ func (r *Router) Run() {
 func (r *Router) Close() {
 }
 
-func redirect(c *gin.Context) {
-	c.Redirect(http.StatusTemporaryRedirect, "http://org"+c.Request.URL.Path)
+func forward(conf configs.Config, client http.Client) func(*gin.Context) {
+	return func(c *gin.Context) {
+		logger.Logger.Info("octopus forward org, ", c.Request.URL.Host, c.Request.URL.Path)
+		request := c.Request.Clone(c.Request.Context())
+		parse, _ := url.ParseRequestURI(conf.OrgHost)
+		request.URL = parse
+		request.Host = conf.OrgHost
+		request.URL.Path = c.Request.URL.Path
+		request.RequestURI = ""
+
+		request.URL.RawQuery = c.Request.URL.RawQuery
+
+		if c.Request.Body != nil {
+			body, err := io.ReadAll(c.Request.Body)
+			defer c.Request.Body.Close()
+			if err != nil {
+				c.Writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if len(body) > 0 {
+				itoa := strconv.Itoa(len(body))
+				request.Header.Set("Content-Length", itoa)
+				request.ContentLength = int64(len(body))
+				request.Body = io.NopCloser(bytes.NewReader(body))
+			}
+
+		}
+
+		response, err := client.Do(request)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		core.DealResponse(c.Writer, response)
+		return
+
+	}
 }

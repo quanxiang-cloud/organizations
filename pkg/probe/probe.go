@@ -13,11 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
+	"github.com/quanxiang-cloud/cabin/logger"
 	"net/http"
 	"strings"
 	"sync/atomic"
-
-	"github.com/go-logr/logr"
 )
 
 const (
@@ -30,11 +29,11 @@ const (
 type Probe struct {
 	readiness int32
 
-	log logr.Logger
+	log logger.AdaptedLogger
 }
 
 // New return *Probe
-func New(log logr.Logger) *Probe {
+func New(log logger.AdaptedLogger) *Probe {
 	return &Probe{
 		log:       log,
 		readiness: readinessPending,

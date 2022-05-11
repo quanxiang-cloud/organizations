@@ -100,6 +100,8 @@ const (
 
 	TEXT = "text"
 
+	LONGTEXT = "longtext"
+
 	INT = "int"
 
 	INT64 = "int64"
@@ -107,6 +109,8 @@ const (
 	FLOAT = "float"
 
 	TIME = "time"
+
+	BOOL = "bool"
 )
 
 // DBColumns key is for front, value is db column type
@@ -117,6 +121,7 @@ var DBColumns = map[string]string{
 	"int":      "int",
 	"float":    "decimal",
 	"time":     "bigint",
+	"boolean":  "tinyint",
 }
 
 // FrontColumns key is for db column type, value is for  front
@@ -127,4 +132,5 @@ var FrontColumns = map[string]string{
 	"int":      "int",
 	"bigint":   "time",
 	"decimal":  "float",
+	"tinyint":  "boolean",
 }

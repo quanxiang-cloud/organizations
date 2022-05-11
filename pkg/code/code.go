@@ -97,6 +97,8 @@ const (
 	ErrFieldColumnUsed = 50034000038
 	// ErrCircleData make a circle data
 	ErrCircleData = 50034000039
+	// ErrColumnExist make a circle data
+	ErrColumnExist = 50034000040
 )
 
 // CodeTable 码表
@@ -140,4 +142,5 @@ var CodeTable = error2.Table{
 	ErrHasBeActive:          "数据中包含已被激活数据，请选择正确数据再操作！",
 	ErrFieldColumnUsed:      "扩展字段功能已被开启，请不要重复操作！",
 	ErrCircleData:           "数据关系成环，请检查后提交！",
+	ErrColumnExist:          "字段命名重复，请修改后再尝试！",
 }
