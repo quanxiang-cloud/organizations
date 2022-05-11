@@ -29,6 +29,8 @@ import (
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/consts"
 	oct "github.com/quanxiang-cloud/organizations/internal/models/octopus"
 	mysql3 "github.com/quanxiang-cloud/organizations/internal/models/octopus/mysql"
+	org "github.com/quanxiang-cloud/organizations/internal/models/org"
+	mysqlOrg "github.com/quanxiang-cloud/organizations/internal/models/org/mysql"
 	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 )
@@ -50,25 +52,27 @@ const (
 
 // Columns column
 type columns struct {
-	DB               *gorm.DB
-	manageColumnRepo oct.ManageColumn
-	useColumnsRepo   oct.UseColumnsRepo
-	tableColumnsRepo oct.UserTableColumnsRepo
-	redisClient      redis.UniversalClient
-	conf             configs.Config
-	client           http.Client
+	DB                  *gorm.DB
+	manageColumnRepo    oct.ManageColumn
+	useColumnsRepo      oct.UseColumnsRepo
+	tableColumnsRepo    oct.UserTableColumnsRepo
+	orgTableColumnsRepo org.UserTableColumnsRepo
+	redisClient         redis.UniversalClient
+	conf                configs.Config
+	client              http.Client
 }
 
 // NewColumns new
 func NewColumns(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) Columns {
 	return &columns{
-		DB:               db,
-		redisClient:      redisClient,
-		manageColumnRepo: mysql3.NewManageColumnRepo(),
-		useColumnsRepo:   mysql3.NewUseColumnsRepo(),
-		tableColumnsRepo: mysql3.NewUserTableColumnsRepo(),
-		conf:             conf,
-		client:           client.New(conf.InternalNet),
+		DB:                  db,
+		redisClient:         redisClient,
+		manageColumnRepo:    mysql3.NewManageColumnRepo(),
+		useColumnsRepo:      mysql3.NewUseColumnsRepo(),
+		tableColumnsRepo:    mysql3.NewUserTableColumnsRepo(),
+		orgTableColumnsRepo: mysqlOrg.NewUserTableColumnsRepo(),
+		conf:                conf,
+		client:              client.New(conf.InternalNet),
 	}
 }
 
@@ -83,10 +87,16 @@ type UpdateColumnRequest struct {
 
 // UpdateColumnResponse update column name
 type UpdateColumnResponse struct {
+	Response *http.Response
 }
 
 // Update update columns alias name
 func (c *columns) Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error) {
+	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, req.Name)
+	if getByName != nil && getByName.ID != req.ID {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+
 	old := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
 	if old == nil {
 		response, err := core.DealRequest(c.client, c.conf.OrgHost, r, req)
@@ -96,9 +106,9 @@ func (c *columns) Update(ctx context.Context, req *UpdateColumnRequest, r *http.
 		core.DealResponse(w, response)
 		return nil, nil
 	}
-	res := c.tableColumnsRepo.SelectByIDAndName(ctx, c.DB, req.ID, req.Name)
-	if res != nil {
-		return nil, error2.New(code.ColumnExist)
+	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
+	if res == nil {
+		return nil, error2.New(code.DataNotExist)
 	}
 	tableColumns := oct.UserTableColumns{}
 	tableColumns.ID = req.ID
@@ -135,6 +145,23 @@ type AddColumnResponse struct {
 
 // Add add self columns
 func (c *columns) Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error) {
+	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, r.Name)
+	if getByName != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByColumnName := c.tableColumnsRepo.GetByColumnName(ctx, c.DB, r.ColumnName)
+	if getByColumnName != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByNameOrg := c.orgTableColumnsRepo.GetByName(ctx, c.DB, r.Name)
+	if getByNameOrg != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+	getByColumnNameOrg := c.orgTableColumnsRepo.GetByColumnName(ctx, c.DB, r.ColumnName)
+	if getByColumnNameOrg != nil {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+
 	tableColumns := oct.UserTableColumns{}
 	tableColumns.ID = id.HexUUID(true)
 	tableColumns.Name = r.Name

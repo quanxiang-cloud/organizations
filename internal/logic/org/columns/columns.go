@@ -78,9 +78,14 @@ type UpdateColumnResponse struct {
 
 // Update update columns alias name
 func (c *columns) Update(ctx context.Context, r *UpdateColumnRequest) (*UpdateColumnResponse, error) {
-	res := c.tableColumnsRepo.SelectByIDAndName(ctx, c.DB, r.ID, r.Name)
-	if res != nil {
-		return nil, error2.New(code.ColumnExist)
+	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, r.Name)
+	if getByName != nil && getByName.ID != r.ID {
+		return nil, error2.New(code.ErrColumnExist)
+	}
+
+	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, r.ID)
+	if res == nil {
+		return nil, error2.New(code.DataNotExist)
 	}
 	tableColumns := org.UserTableColumns{}
 	tableColumns.ID = r.ID

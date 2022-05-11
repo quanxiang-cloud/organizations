@@ -55,4 +55,6 @@ type UserTableColumnsRepo interface {
 	SelectByIDAndName(ctx context.Context, db *gorm.DB, id, name string) (res *UserTableColumns)
 	GetFilter(ctx context.Context, db *gorm.DB, status, attr int) ([]UserTableColumns, map[string]string)
 	GetXlsxField(ctx context.Context, db *gorm.DB, status int) map[string]string
+	GetByName(ctx context.Context, db *gorm.DB, name string) *UserTableColumns
+	GetByColumnName(ctx context.Context, db *gorm.DB, columName string) *UserTableColumns
 }
