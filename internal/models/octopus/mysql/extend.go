@@ -131,6 +131,10 @@ func (e *extendRepo) AddColumns(db *gorm.DB, tableName, columnName string, types
 		sql = sql + " add " + columnName + " " + consts.DBColumns[types] + "(" + strconv.Itoa(len) + "," + strconv.Itoa(pointLen) + ");"
 	case consts.TEXT:
 		sql = sql + " add " + columnName + " " + consts.DBColumns[types] + ";"
+	case consts.LONGTEXT:
+		sql = sql + " add " + columnName + " " + consts.DBColumns[types] + ";"
+	case consts.BOOL:
+		sql = sql + " add " + columnName + " " + consts.DBColumns[types] + "(1);"
 
 	}
 	return db.Exec(sql).Error
