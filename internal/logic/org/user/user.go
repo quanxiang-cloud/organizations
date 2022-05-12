@@ -1189,6 +1189,7 @@ func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([]
 
 }
 
+// CheckLeader check relation circle
 func CheckLeader(c context.Context, db *gorm.DB, ur org.UserLeaderRelationRepo, userID, startUserID string) error {
 	if userID == startUserID {
 		return errors.New("circle leader")
