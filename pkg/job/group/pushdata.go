@@ -15,10 +15,10 @@ limitations under the License.
 import (
 	"flag"
 	"github.com/quanxiang-cloud/organizations/pkg/es"
+	"github.com/quanxiang-cloud/organizations/pkg/job/group/logic"
 
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
-	"github.com/quanxiang-cloud/organizations/pkg/job/refactor/logic"
 )
 
 var (
@@ -36,11 +36,11 @@ func main() {
 		panic(err)
 	}
 	es.New(&conf.Elastic, adaptedLogger)
-	v1, err := logic.NewCleanV1(conf, adaptedLogger)
+	v1, err := logic.NewPushToES(conf, adaptedLogger)
 	if err != nil {
 		panic(err)
 	}
-	err = v1.CleanV1()
+	err = v1.PushData()
 	if err != nil {
 		panic(err)
 	}
