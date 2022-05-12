@@ -14,6 +14,7 @@ limitations under the License.
 */
 import (
 	"context"
+	"github.com/quanxiang-cloud/organizations/pkg/component/event"
 	"gorm.io/gorm"
 
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -47,6 +48,7 @@ type Department interface {
 	GetMaxGrade(c context.Context, r *GetMaxGradeRequest) (*GetMaxGradeResponse, error)
 	// TestDelete just for test
 	TestDelete(c context.Context, r *DelOneRequest) error
+	DelGroup(c context.Context, r *DelGroupRequest) (*DelGroupResponse, error)
 }
 
 const (
@@ -877,4 +879,54 @@ func (d *department) GetMaxGrade(c context.Context, r *GetMaxGradeRequest) (*Get
 	return &GetMaxGradeResponse{
 		maxGrade,
 	}, nil
+}
+
+// DelGroupRequest del request
+type DelGroupRequest struct {
+	ID string `json:"id" binding:"required,max=64" uri:"id"`
+}
+
+// DelGroupResponse del response
+type DelGroupResponse struct {
+	Users []*org.User      `json:"-"`
+	Spec  []*event.OrgSpec `json:"-"`
+}
+
+// DelGroup del
+func (d *department) DelGroup(c context.Context, r *DelGroupRequest) (*DelGroupResponse, error) {
+
+	dep := d.depRepo.Get(c, d.DB, r.ID)
+	response := &DelGroupResponse{}
+	if dep != nil && dep.Attr == GroupType {
+		tx := d.DB.Begin()
+		relations := d.userDepRepo.SelectByDEPID(d.DB, r.ID)
+		specs := make([]*event.OrgSpec, 0)
+		ids := make([]string, 0)
+		for k := range relations {
+			specs = append(specs, &event.OrgSpec{
+				UserID:   relations[k].UserID,
+				SourceID: r.ID,
+				Action:   event.ActionDel,
+			})
+			ids = append(ids, relations[k].UserID)
+		}
+		if len(specs) > 0 {
+			response.Spec = specs
+		}
+		if len(ids) > 0 {
+			users := d.userRepo.List(c, d.DB, ids...)
+			response.Users = users
+		}
+
+		err := d.depRepo.Delete(c, tx, r.ID)
+		err = d.userDepRepo.DeleteByDepIDs(tx, r.ID)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		tx.Commit()
+
+		return response, nil
+	}
+	return nil, error2.New(code.InvalidUpdate)
 }

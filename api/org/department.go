@@ -338,3 +338,27 @@ func (d *Department) GetMaxGrade(c *gin.Context) {
 	resp.Format(res, err).Context(c)
 	return
 }
+
+//DelGroup update
+func (d *Department) DelGroup(c *gin.Context) {
+	r := new(department.DelGroupRequest)
+	err := c.ShouldBindUri(r)
+	if err != nil {
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+	res, err := d.dep.DelGroup(ginheader.MutateContext(c), r)
+	if err != nil {
+		resp.Format(nil, err).Context(c)
+		return
+	}
+	//if len(res.Users) > 0 {
+	//	d.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	//}
+	//d.search.PushDep(ginheader.MutateContext(c), nil)
+	//if len(res.Spec) > 0 {
+	//	common.SendToDapr(ginheader.MutateContext(c), d.bus, res.Spec...)
+	//}
+	resp.Format(res, err).Context(c)
+	return
+}
