@@ -192,6 +192,12 @@ func (u *user) Add(c context.Context, r *AddUserRequest) (res *AddUserResponse, 
 			return nil, error2.New(code.InvalidEmail)
 		}
 	}
+	for _, v := range r.Leader {
+		err := CheckLeader(c, u.DB, u.userLeaderRepo, v.UserID, r.ID)
+		if err != nil {
+			return nil, error2.New(code.ErrCircleData)
+		}
+	}
 
 	old := u.accountReo.SelectByAccount(u.DB, r.Email)
 	if old != nil {
@@ -353,6 +359,12 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 			return nil, error2.New(code.InvalidEmail)
 		}
 	}
+	for _, v := range r.Leader {
+		err := CheckLeader(c, u.DB, u.userLeaderRepo, v.UserID, r.ID)
+		if err != nil {
+			return nil, error2.New(code.ErrCircleData)
+		}
+	}
 	oldUser := u.userRepo.Get(c, u.DB, r.ID)
 	updateData := &org.User{}
 	updateData.ID = r.ID
@@ -439,10 +451,6 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 			return nil, err
 		}
 		for _, v := range r.Leader {
-			err = checkLeader(c, u, v.UserID, r.ID)
-			if err != nil {
-				return nil, error2.New(code.ErrCircleData)
-			}
 			relation := org.UserLeaderRelation{
 				ID:       id2.ShortID(0),
 				UserID:   r.ID,
@@ -1239,15 +1247,18 @@ func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([]
 
 }
 
-func checkLeader(c context.Context, u *user, userID, startUserID string) error {
-	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
+func CheckLeader(c context.Context, db *gorm.DB, ur org.UserLeaderRelationRepo, userID, startUserID string) error {
+	if userID == startUserID {
+		return errors.New("circle leader")
+	}
+	relations := ur.SelectByUserIDs(db, userID)
 	if len(relations) > 0 {
 		for k := range relations {
 			if relations[k].LeaderID == startUserID {
 				return errors.New("circle leader")
 			}
 			if relations[k].LeaderID != "" {
-				err := checkLeader(c, u, relations[k].LeaderID, startUserID)
+				err := CheckLeader(c, db, ur, relations[k].LeaderID, startUserID)
 				if err != nil {
 					return err
 				}
