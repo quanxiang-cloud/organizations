@@ -266,6 +266,7 @@ const (
 func (u *othersServer) addUserOrUpdate(c context.Context, reqData []AddUser, isUpdate int, profile header2.Profile) (result map[int]*Result, err error) {
 	result = make(map[int]*Result)
 	info := systems.GetSecurityInfo(c, u.conf, u.redisClient)
+A:
 	for k := range reqData {
 		switch reqData[k].UseStatus {
 		case consts.NormalStatus:
@@ -316,6 +317,7 @@ func (u *othersServer) addUserOrUpdate(c context.Context, reqData []AddUser, isU
 				continue
 			}
 		}
+
 		nowUnix := time.NowUnix()
 		u2 := &org.User{
 			Name:      reqData[k].Name,
@@ -393,6 +395,14 @@ func (u *othersServer) addUserOrUpdate(c context.Context, reqData []AddUser, isU
 					result[k].Attr = updateOk
 				}
 
+			}
+		}
+		for k1 := range reqData[k].LeadersID {
+			err := user.CheckLeader(c, u.DB, u.userLeaderRepo, userID, reqData[k].LeadersID[k1])
+			if err != nil {
+				tx.Rollback()
+				result[k].Attr = fail
+				continue A
 			}
 		}
 		err = u.dealUserDepartmentRelation(c, tx, userID, reqData[k].DepsID...)
