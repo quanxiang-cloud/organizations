@@ -377,6 +377,7 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 		updateAccount.UpdatedAt = unix
 		err := u.accountReo.Update(u.DB, updateAccount)
 		if err != nil {
+			tx.Rollback()
 			return nil, err
 		}
 	}
