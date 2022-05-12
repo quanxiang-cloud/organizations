@@ -98,16 +98,16 @@ func (u *UserAPI) Update(c *gin.Context) {
 		resp.Format(nil, err).Context(c)
 		return
 	}
-	if res.UpdateUser != nil {
-		u.search.PushUser(ginheader.MutateContext(c), nil, res.UpdateUser)
-	}
-	if len(res.Users) > 0 {
-		u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
-
-	}
-	if len(res.Spec) > 0 {
-		common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
-	}
+	//if res.UpdateUser != nil {
+	//	u.search.PushUser(ginheader.MutateContext(c), nil, res.UpdateUser)
+	//}
+	//if len(res.Users) > 0 {
+	//	u.search.PushUser(ginheader.MutateContext(c), nil, res.Users...)
+	//
+	//}
+	//if len(res.Spec) > 0 {
+	//	common.SendToDapr(ginheader.MutateContext(c), u.bus, res.Spec...)
+	//}
 
 	resp.Format(res, nil).Context(c)
 	return

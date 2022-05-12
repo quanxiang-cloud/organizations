@@ -23,24 +23,29 @@ import (
 type useColumnsRepo struct {
 }
 
-func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []octopus.UseColumns) (err error) {
-	columns := octopus.UseColumns{}
+func (u *useColumnsRepo) Create(ctx context.Context, tx *gorm.DB, reqs []octopus.UseColumns) (err error) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	if tenantID == "" {
-		tx = tx.Where("tenant_id=? or tenant_id is null", tenantID)
-	} else {
-		tx = tx.Where("tenant_id=?", tenantID)
-	}
-	err = tx.Table(columns.TableName()).Delete(columns).Error
+
 	if len(reqs) > 0 {
 		for k := range reqs {
 			reqs[k].TenantID = tenantID
-			err = tx.Create(&reqs[k]).Error
 		}
-
+		return tx.CreateInBatches(reqs, len(reqs)).Error
 	}
-	if err != nil {
-		return err
+	return nil
+}
+
+func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []octopus.UseColumns) (err error) {
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+
+	if len(reqs) > 0 {
+		for k := range reqs {
+			reqs[k].TenantID = tenantID
+			err := tx.Model(&octopus.UseColumns{}).Updates(reqs[k]).Error
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -63,8 +68,8 @@ func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int)
 	return nil
 }
 
-func (u *useColumnsRepo) DeleteByID(ctx context.Context, tx *gorm.DB, id string) (err error) {
-	return tx.Where("column_id=?", id).Delete(&octopus.UseColumns{}).Error
+func (u *useColumnsRepo) DeleteByID(ctx context.Context, tx *gorm.DB, id ...string) (err error) {
+	return tx.Where("column_id in (?)", id).Delete(&octopus.UseColumns{}).Error
 }
 
 //NewUseColumnsRepo 初始化

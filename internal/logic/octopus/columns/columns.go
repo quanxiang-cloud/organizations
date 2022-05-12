@@ -39,7 +39,7 @@ import (
 type Columns interface {
 	GetAll(ctx context.Context, req *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error)
 	Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error)
-	Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error)
+	Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error)
 	Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error)
 	Drop(ctx context.Context, req *DropColumnRequest, r *http.Request) (*DropColumnResponse, error)
 	Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error)
@@ -260,9 +260,10 @@ type ColumnResponse struct {
 	PointLen   int    `json:"pointLen"`
 	//1:use,-1:no use
 	Status int `json:"status"`
-	//1:default,-1:can not modify,2:can be modify
-	Attr   int    `json:"attr"`
-	Format string `json:"format"`
+	//1:sys,2:alias
+	Attr         int    `json:"attr"`
+	ViewerStatus int    `json:"viewerStatus"` //home 1 can see ,-1 can not set
+	Format       string `json:"format"`
 }
 
 // GetAll get all column
@@ -301,9 +302,10 @@ func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *htt
 	}
 	if len(all.All) > 0 {
 		for k := range all.All {
-			for _, v1 := range useColumns {
+			for k1, v1 := range useColumns {
 				if all.All[k].ID == v1.ColumnID {
 					all.All[k].Status = useStatus
+					all.All[k].ViewerStatus = useColumns[k1].ViewerStatus
 				}
 			}
 		}
@@ -314,10 +316,9 @@ func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *htt
 
 // SetUseColumnsRequest req set use columns
 type SetUseColumnsRequest struct {
-	Columns   []SetUseColumn `json:"columns"`
+	Add       []SetUseColumn `json:"add"`
+	Delete    []string       `json:"delete"`
 	CreatedBy string
-	R         *http.Request
-	W         http.ResponseWriter
 }
 
 // SetUseColumn set will use column
@@ -331,7 +332,7 @@ type SetUseColumnsResponse struct {
 }
 
 // Set set use column
-func (c *columns) Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error) {
+func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error) {
 	all, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, 0)
 	aliasColumnMap := make(map[string]*oct.UserTableColumns)
 	for k := range all {
@@ -339,65 +340,69 @@ func (c *columns) Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColu
 	}
 	systemsColumns := make([]SetUseColumn, 0)
 	aliasClolumns := make([]SetUseColumn, 0)
-	for k := range r.Columns {
-		if v, ok := aliasColumnMap[r.Columns[k].ColumnID]; ok && v != nil {
-			aliasClolumns = append(aliasClolumns, r.Columns[k])
+	for k := range req.Add {
+		if v, ok := aliasColumnMap[req.Add[k].ColumnID]; ok && v != nil {
+			aliasClolumns = append(aliasClolumns, req.Add[k])
 		} else {
-			systemsColumns = append(systemsColumns, r.Columns[k])
+			systemsColumns = append(systemsColumns, req.Add[k])
 		}
 	}
 	var flag = false
+	request := SetUseColumnsRequest{}
 	if len(systemsColumns) > 0 {
-		request := SetUseColumnsRequest{}
-		request.Columns = systemsColumns
-		response, err := core.DealRequest(c.client, c.conf.OrgHost, r.R, request)
-		if err != nil {
-			return nil, err
-		}
-		in := new(core.INResponse)
-		resp, err := core.DeserializationResp(ctx, response, in)
-		if err != nil {
-			return nil, err
-		}
-		if resp != nil && resp.Code == 0 {
-			flag = true
-		} else {
-			core.DealResponse(r.W, response)
-			return nil, nil
-		}
+		request.Add = systemsColumns
+		request.Delete = req.Delete
 	} else {
 		flag = true
 	}
+	response, err := core.DealRequest(c.client, c.conf.OrgHost, r, request)
+	if err != nil {
+		return nil, err
+	}
+	in := new(core.INResponse)
+	resp, err := core.DeserializationResp(ctx, response, in)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil && resp.Code == 0 {
+		flag = true
+	} else {
+		core.DealResponse(w, response)
+		return nil, nil
+	}
 	if flag {
 		tx := c.DB.Begin()
+		useColumns := make([]oct.UseColumns, 0)
 		if len(aliasClolumns) > 0 {
 			unix := time.NowUnix()
-			useColumns := make([]oct.UseColumns, 0)
-			for _, v := range aliasClolumns {
+			for k := range aliasClolumns {
 				useColumn := oct.UseColumns{}
 				useColumn.ID = id.HexUUID(true)
-				useColumn.ColumnID = v.ColumnID
-				useColumn.ViewerStatus = v.ViewerStatus
-				useColumn.UpdatedBy = r.CreatedBy
+				useColumn.ColumnID = aliasClolumns[k].ColumnID
+				useColumn.ViewerStatus = aliasClolumns[k].ViewerStatus
+				useColumn.UpdatedBy = req.CreatedBy
 				useColumn.UpdatedAt = unix
-				useColumn.CreatedBy = r.CreatedBy
+				useColumn.CreatedBy = req.CreatedBy
 				useColumn.CreatedAt = unix
 				useColumns = append(useColumns, useColumn)
+				req.Delete = append(req.Delete, req.Add[k].ColumnID)
 			}
-
-			err := c.useColumnsRepo.Update(ctx, tx, useColumns)
+		}
+		if len(req.Delete) > 0 {
+			err := c.useColumnsRepo.DeleteByID(ctx, tx, req.Delete...)
 			if err != nil {
 				tx.Rollback()
 				return nil, err
 			}
-			tx.Commit()
-			return nil, nil
 		}
-		err := c.useColumnsRepo.Update(ctx, tx, nil)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
+		if len(useColumns) > 0 {
+			err := c.useColumnsRepo.Create(ctx, tx, useColumns)
+			if err != nil {
+				tx.Rollback()
+				return nil, err
+			}
 		}
+
 		tx.Commit()
 		return nil, nil
 	}

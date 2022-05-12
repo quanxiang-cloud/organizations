@@ -23,24 +23,29 @@ import (
 type useColumnsRepo struct {
 }
 
-func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.UseColumns) (err error) {
+func (u *useColumnsRepo) Create(ctx context.Context, tx *gorm.DB, reqs []org.UseColumns) (err error) {
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	sql := ""
-	if tenantID == "" {
-		sql = sql + "delete from org_use_columns where tenant_id is null"
-	} else {
-		sql = sql + "delete from org_use_columns where tenant_id='" + tenantID + "'"
-	}
 
-	err = tx.Exec(sql).Error
 	if len(reqs) > 0 {
 		for k := range reqs {
-			err = tx.Create(&reqs[k]).Error
+			reqs[k].TenantID = tenantID
 		}
-
+		return tx.CreateInBatches(reqs, len(reqs)).Error
 	}
-	if err != nil {
-		return err
+	return nil
+}
+
+func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.UseColumns) (err error) {
+	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
+
+	if len(reqs) > 0 {
+		for k := range reqs {
+			reqs[k].TenantID = tenantID
+			err := tx.Model(&org.UseColumns{}).Updates(reqs[k]).Error
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -63,8 +68,8 @@ func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int)
 	return nil
 }
 
-func (u *useColumnsRepo) DeleteByID(ctx context.Context, tx *gorm.DB, id string) (err error) {
-	return tx.Where("column_id=?", id).Delete(&org.UseColumns{}).Error
+func (u *useColumnsRepo) DeleteByID(ctx context.Context, tx *gorm.DB, id ...string) (err error) {
+	return tx.Where("column_id in (?)", id).Delete(&org.UseColumns{}).Error
 }
 
 //NewUseColumnsRepo new

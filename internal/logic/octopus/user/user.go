@@ -106,9 +106,10 @@ func (u *user) Add(ctx context.Context, req *AddUserRequest, r *http.Request) (*
 	}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if resp != nil && resp.Code == 0 {
-		tx := u.DB.Begin()
+
 		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AliasAttr)
 		if aliasFilter != nil {
+			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
 			req.UserInfo[consts.ID] = in.ID
 			err = u.extend.Insert(u.DB, tx, tenantID, req.UserInfo)
@@ -118,6 +119,7 @@ func (u *user) Add(ctx context.Context, req *AddUserRequest, r *http.Request) (*
 			}
 			tx.Commit()
 		}
+
 	}
 	return &AddUserResponse{Response: response}, nil
 
@@ -144,9 +146,10 @@ func (u *user) Update(ctx context.Context, req *UpdateUserRequest, r *http.Reque
 	resp, err := core.DeserializationResp(ctx, response, in)
 	if resp != nil && resp.Code == 0 {
 		_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-		tx := u.DB.Begin()
+
 		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AliasAttr)
 		if aliasFilter != nil {
+			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
 			extend := &oct.Extend{}
 			extend.ID = in.ID
@@ -157,6 +160,7 @@ func (u *user) Update(ctx context.Context, req *UpdateUserRequest, r *http.Reque
 			}
 			tx.Commit()
 		}
+
 	}
 	return &UpdateUserResponse{
 		Response: response,
