@@ -37,7 +37,8 @@ func (UseColumns) TableName() string {
 
 //UseColumnsRepo interface
 type UseColumnsRepo interface {
+	Create(ctx context.Context, tx *gorm.DB, reqs []UseColumns) (err error)
 	Update(ctx context.Context, tx *gorm.DB, reqs []UseColumns) (err error)
 	SelectAll(ctx context.Context, db *gorm.DB, status int) (res []UseColumns)
-	DeleteByID(ctx context.Context, tx *gorm.DB, id string) error
+	DeleteByID(ctx context.Context, tx *gorm.DB, id ...string) error
 }

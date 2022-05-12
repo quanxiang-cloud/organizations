@@ -56,10 +56,8 @@ func (co *Columns) Set(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	r.R = c.Request
-	r.W = c.Writer
 	r.CreatedBy = profile.UserID
-	res, err := co.columns.Set(ginheader.MutateContext(c), r)
+	res, err := co.columns.Set(ginheader.MutateContext(c), r, c.Request, c.Writer)
 	resp.Format(res, err).Context(c)
 	return
 }

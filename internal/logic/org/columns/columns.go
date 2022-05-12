@@ -124,9 +124,10 @@ type ColumnResponse struct {
 	PointLen   int    `json:"pointLen"`
 	//1:use,-1:no use
 	Status int `json:"status"`
-	//1:default,-1:can not modify,2:can be modify
-	Attr   int    `json:"attr"`
-	Format string `json:"format"`
+	//1:sys,2:alias
+	Attr         int    `json:"attr"`
+	ViewerStatus int    `json:"viewerStatus"` //home 1 can see ,-1 can not set
+	Format       string `json:"format"`
 }
 
 // GetAll get all column
@@ -153,9 +154,10 @@ func (c *columns) GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllC
 	}
 	if len(all.All) > 0 {
 		for k := range all.All {
-			for _, v1 := range useColumns {
+			for k1, v1 := range useColumns {
 				if all.All[k].ID == v1.ColumnID {
 					all.All[k].Status = useStatus
+					all.All[k].ViewerStatus = useColumns[k1].ViewerStatus
 				}
 			}
 		}
@@ -165,7 +167,8 @@ func (c *columns) GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllC
 
 // SetUseColumnsRequest req set use columns
 type SetUseColumnsRequest struct {
-	Columns []SetUseColumn `json:"columns"`
+	Add    []SetUseColumn `json:"add"`
+	Delete []string       `json:"delete"`
 }
 
 // SetUseColumn set will use column
@@ -182,28 +185,31 @@ type SetUseColumnsResponse struct {
 func (c *columns) Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error) {
 
 	tx := c.DB.Begin()
-	if len(r.Columns) > 0 {
-		useColumns := make([]org.UseColumns, 0)
-		for _, v := range r.Columns {
+	useColumns := make([]org.UseColumns, 0)
+	if len(r.Add) > 0 {
+
+		for k := range r.Add {
 			useColumn := org.UseColumns{}
 			useColumn.ID = id.HexUUID(true)
-			useColumn.ColumnID = v.ColumnID
-			useColumn.ViewerStatus = v.ViewerStatus
+			useColumn.ColumnID = r.Add[k].ColumnID
+			useColumn.ViewerStatus = r.Add[k].ViewerStatus
 			useColumns = append(useColumns, useColumn)
+			r.Delete = append(r.Delete, r.Add[k].ColumnID)
 		}
-
-		err := c.useColumnsRepo.Update(ctx, tx, useColumns)
+	}
+	if len(r.Delete) > 0 {
+		err := c.useColumnsRepo.DeleteByID(ctx, tx, r.Delete...)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
-		tx.Commit()
-		return nil, nil
 	}
-	err := c.useColumnsRepo.Update(ctx, tx, nil)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
+	if len(useColumns) > 0 {
+		err := c.useColumnsRepo.Create(ctx, tx, useColumns)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 	tx.Commit()
 	return nil, nil
