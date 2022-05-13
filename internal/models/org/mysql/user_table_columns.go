@@ -60,7 +60,7 @@ func (u *userTableColumnsRepo) Insert(ctx context.Context, tx *gorm.DB, req *org
 	return nil
 }
 
-func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status int) (list []org.UserTableColumns, total int64) {
+func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status int, name string) (list []org.UserTableColumns, total int64) {
 	users := make([]org.UserTableColumns, 0)
 	var num int64
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
@@ -71,6 +71,9 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 	}
 	if status != 0 {
 		db = db.Where("status = ?", status)
+	}
+	if name != "" {
+		db = db.Where("name like ?", "%"+name+"%")
 	}
 	db.Model(&org.UserTableColumns{}).Count(&num)
 	affected := db.Find(&users).RowsAffected
