@@ -127,12 +127,12 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		manageDep.PUT("/update", depAPI.UpdateDep)
 		manageDep.GET("/tree", depAPI.DEPTree)
 		manageDep.GET("/list", depAPI.PageList)
-		manageDep.GET("/group/list", depAPI.GroupPageList)
 		manageDep.GET("/info", depAPI.SelectDepByIDAdmin)
 		manageDep.GET("/pid", depAPI.SelectDepByPIDAdmin)
 		manageDep.PUT("/set/leader", depAPI.SetDEPLeader)
 		manageDep.PUT("/cancel/leader", depAPI.CancelDEPLeader)
 		manageDep.GET("/check", depAPI.CheckDEPIsExist)
+		manageDep.GET("/group/list", depAPI.GroupPageList)
 		manageDep.DELETE("/group/:id", depAPI.DelGroup)
 
 	}

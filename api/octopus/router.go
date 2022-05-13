@@ -132,6 +132,8 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 		manageDep.PUT("/set/leader", forward(c, httpClient))
 		manageDep.PUT("/cancel/leader", forward(c, httpClient))
 		manageDep.GET("/check", forward(c, httpClient))
+		manageDep.GET("/group/list", forward(c, httpClient))
+		manageDep.DELETE("/group/:id", forward(c, httpClient))
 
 	}
 
