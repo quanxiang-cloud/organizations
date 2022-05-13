@@ -49,7 +49,7 @@ type UserTableColumnsRepo interface {
 	Insert(ctx context.Context, tx *gorm.DB, req *UserTableColumns) (err error)
 	Update(ctx context.Context, tx *gorm.DB, req *UserTableColumns) (err error)
 	Delete(ctx context.Context, tx *gorm.DB, id string) (err error)
-	GetAll(ctx context.Context, db *gorm.DB, status int) (list []UserTableColumns, total int64)
+	GetAll(ctx context.Context, db *gorm.DB, status int, name string) (list []UserTableColumns, total int64)
 	SelectByID(ctx context.Context, db *gorm.DB, id string) (res *UserTableColumns)
 	SelectByIDAndName(ctx context.Context, db *gorm.DB, id, name string) (res *UserTableColumns)
 	GetFilter(ctx context.Context, db *gorm.DB, status, attr int) ([]UserTableColumns, map[string]string)

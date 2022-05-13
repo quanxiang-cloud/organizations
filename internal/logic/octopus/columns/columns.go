@@ -242,7 +242,8 @@ func (c *columns) Drop(ctx context.Context, req *DropColumnRequest, r *http.Requ
 
 // GetAllColumnsRequest user table all column request
 type GetAllColumnsRequest struct {
-	Status int `json:"status" form:"status"`
+	Status int    `json:"status" form:"status"`
+	Name   string `json:"name" form:"name"`
 }
 
 // GetAllColumnsResponse user table all column response
@@ -281,8 +282,8 @@ func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *htt
 	if len(columnsResponse.All) > 0 {
 		all.All = append(all.All, columnsResponse.All...)
 	}
-	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, data.Status)
-	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, data.Status)
+	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, data.Status, data.Name)
+	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, 0)
 
 	for k := range tableColumns {
 		if tableColumns[k].ColumnsName == consts.TENANTID {
@@ -333,7 +334,7 @@ type SetUseColumnsResponse struct {
 
 // Set set use column
 func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error) {
-	all, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, 0)
+	all, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
 	aliasColumnMap := make(map[string]*oct.UserTableColumns)
 	for k := range all {
 		aliasColumnMap[all[k].ID] = &all[k]
@@ -421,7 +422,7 @@ type OpenColumnResponse struct {
 
 // Open open colum field
 func (c *columns) Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error) {
-	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0)
+	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
 	if total > 0 {
 		return nil, error2.New(code.ErrFieldColumnUsed)
 	}

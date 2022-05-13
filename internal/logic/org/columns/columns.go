@@ -106,7 +106,8 @@ func (c *columns) Update(ctx context.Context, r *UpdateColumnRequest) (*UpdateCo
 
 // GetAllColumnsRequest get column request
 type GetAllColumnsRequest struct {
-	Status int `json:"status" form:"status"`
+	Status int    `json:"status" form:"status"`
+	Name   string `json:"name" form:"name"`
 }
 
 // GetAllColumnsResponse get column response
@@ -132,8 +133,8 @@ type ColumnResponse struct {
 
 // GetAll get all column
 func (c *columns) GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllColumnsResponse, error) {
-	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, r.Status)
-	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, r.Status)
+	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, r.Status, r.Name)
+	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, 0)
 
 	all := &GetAllColumnsResponse{}
 	for k := range tableColumns {
@@ -226,7 +227,7 @@ type OpenColumnResponse struct {
 
 // Open open colum field
 func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnResponse, error) {
-	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0)
+	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
 	if total > 0 {
 		return nil, error2.New(code.ErrFieldColumnUsed)
 	}
@@ -244,6 +245,7 @@ func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnRe
 			tableColumns.Len = userColumns[k].GetCharacterMaximumLength()
 			tableColumns.PointLen = userColumns[k].GetNumericScale()
 			tableColumns.Attr = consts.SystemAttr
+			tableColumns.Status = consts.NormalStatus
 
 			err := c.tableColumnsRepo.Insert(ctx, tx, &tableColumns)
 
