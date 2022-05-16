@@ -79,7 +79,6 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 	manage := v1.Group("/m")
 	manageUser := manage.Group("/user")
 	{
-
 		manageUser.POST("/add", userAPI.Add)
 		manageUser.PUT("/update", userAPI.Update)
 		manageUser.POST("/list", userAPI.PageList)
