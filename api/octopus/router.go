@@ -88,6 +88,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger) 
 		manageUser.GET("/info", userAPI.AdminUserInfo)
 		manageUser.PUT("/change/dep", forward(c, httpClient))
 		manageUser.GET("/index/count", forward(c, httpClient))
+		manageUser.GET("/group/set", forward(c, httpClient))
 
 	}
 
