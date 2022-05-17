@@ -41,7 +41,7 @@ func (co *Columns) Open(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	res, err := co.columns.Open(ginheader.MutateContext(c), r, c.Request)
+	res, err := co.columns.Open(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -56,7 +56,7 @@ func (co *Columns) Set(c *gin.Context) {
 		return
 	}
 	r.CreatedBy = profile.UserID
-	res, err := co.columns.Set(ginheader.MutateContext(c), r, c.Request, c.Writer)
+	res, err := co.columns.Set(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -69,7 +69,7 @@ func (co *Columns) GetAll(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	all, err := co.columns.GetAll(ginheader.MutateContext(c), r, c.Request, c.Writer)
+	all, err := co.columns.GetAll(ginheader.MutateContext(c), r)
 	resp.Format(all, err).Context(c)
 	return
 }
@@ -82,7 +82,7 @@ func (co *Columns) GetByRoleID(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	all, err := co.columns.GetByRoleID(ginheader.MutateContext(c), r, c.Request, c.Writer)
+	all, err := co.columns.GetByRoleID(ginheader.MutateContext(c), r)
 	resp.Format(all, err).Context(c)
 	return
 }
@@ -98,7 +98,7 @@ func (co *Columns) Update(c *gin.Context) {
 	}
 	r.UpdatedBy = profile.UserID
 
-	res, err := co.columns.Update(ginheader.MutateContext(c), r, c.Request, c.Writer)
+	res, err := co.columns.Update(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -114,6 +114,19 @@ func (co *Columns) Add(c *gin.Context) {
 	}
 	r.CreatedBy = profile.UserID
 	res, err := co.columns.Add(ginheader.MutateContext(c), r)
+	resp.Format(res, err).Context(c)
+	return
+}
+
+// Drop del
+func (co *Columns) Drop(c *gin.Context) {
+	r := new(columns.DropColumnRequest)
+	err := c.ShouldBind(r)
+	if err != nil {
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+	res, err := co.columns.Drop(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
