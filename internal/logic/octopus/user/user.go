@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/quanxiang-cloud/organizations/pkg/goalie"
 	"io"
 	"net/http"
 	"sort"
@@ -56,26 +57,30 @@ const (
 type user struct {
 	DB *gorm.DB
 	//message     message.Message
-	redisClient redis.UniversalClient
-	columnRepo  oct.UserTableColumnsRepo
-	message     message.Message
-	ldap        ldap.Ldap
-	conf        configs.Config
-	extend      oct.ExtendRepo
-	client      http.Client
+	redisClient    redis.UniversalClient
+	columnRepo     oct.UserTableColumnsRepo
+	message        message.Message
+	ldap           ldap.Ldap
+	conf           configs.Config
+	extend         oct.ExtendRepo
+	client         http.Client
+	columnRoleRepo oct.UseColumnsRepo
+	goalieClient   goalie.Goalie
 }
 
 // NewUser new
 func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) User {
 	return &user{
-		DB:          db,
-		redisClient: redisClient,
-		columnRepo:  mysql3.NewUserTableColumnsRepo(),
-		message:     message.NewMessage(conf.InternalNet),
-		ldap:        ldap.NewLdap(conf.InternalNet),
-		conf:        conf,
-		extend:      mysql3.NewExtendRepo(),
-		client:      client.New(conf.InternalNet),
+		DB:             db,
+		redisClient:    redisClient,
+		columnRepo:     mysql3.NewUserTableColumnsRepo(),
+		message:        message.NewMessage(conf.InternalNet),
+		ldap:           ldap.NewLdap(conf.InternalNet),
+		conf:           conf,
+		extend:         mysql3.NewExtendRepo(),
+		client:         client.New(conf.InternalNet),
+		columnRoleRepo: mysql3.NewUseColumnsRepo(),
+		goalieClient:   goalie.NewGoalie(conf.InternalNet),
 	}
 }
 
@@ -106,8 +111,11 @@ func (u *user) Add(ctx context.Context, req *AddUserRequest, r *http.Request) (*
 	}
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if resp != nil && resp.Code == 0 {
-
-		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AliasAttr)
+		columnIDs, _, err := GetRoles(ctx, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, false, columnIDs...)
 		if aliasFilter != nil {
 			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
@@ -146,8 +154,11 @@ func (u *user) Update(ctx context.Context, req *UpdateUserRequest, r *http.Reque
 	resp, err := core.DeserializationResp(ctx, response, in)
 	if resp != nil && resp.Code == 0 {
 		_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-
-		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AliasAttr)
+		columnIDs, _, err := GetRoles(ctx, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, false, columnIDs...)
 		if aliasFilter != nil {
 			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
@@ -238,7 +249,11 @@ func (u *user) AdminSelectByID(ctx context.Context, req *SearchOneUserRequest, r
 	if old != nil {
 		m := make(map[string]interface{})
 		resp, _ := core.DeserializationResp(ctx, response, &m)
-		_, filter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AllAttr)
+		columnIDs, _, err := GetRoles(ctx, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		_, filter := u.columnRepo.GetFilter(ctx, u.DB, req.ID == r.Header.Get("User-Id"), columnIDs...)
 		if filter != nil {
 			core.Filter(&old, filter, core.OUT)
 			for k, v1 := range old {
@@ -280,8 +295,18 @@ func (u *user) UserSelectByID(ctx context.Context, req *ViewerSearchOneUserReque
 	if old != nil {
 		m := make(map[string]interface{})
 		resp, _ := core.DeserializationResp(ctx, response, &m)
-		_, filter := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldViewerStatus, consts.AliasAttr)
-		if filter != nil {
+		columnIDs, _, err := GetRoles(ctx, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		filter := make(map[string]string)
+		if len(columnIDs) > 0 {
+			_, filter = u.columnRepo.GetFilter(ctx, u.DB, r.Header.Get("User-Id") == req.ID, columnIDs...)
+		}
+		if r.Header.Get("User-Id") == req.ID {
+			_, filter = u.columnRepo.GetFilter(ctx, u.DB, true, columnIDs...)
+		}
+		if len(filter) > 0 {
 			core.Filter(&old, filter, core.OUT)
 			for k, v1 := range old {
 				m[k] = v1
@@ -294,6 +319,7 @@ func (u *user) UserSelectByID(ctx context.Context, req *ViewerSearchOneUserReque
 			itoa := strconv.Itoa(l)
 			response.Header.Set("Content-Length", itoa)
 		}
+
 	}
 	return &ViewerSearchOneUserResponse{
 		Response: response,
@@ -366,4 +392,32 @@ func (u *user) Template(c context.Context, req *GetTemplateFileRequest, r *http.
 	res.FileName = u.conf.TemplateName
 	return res, nil
 
+}
+
+// GetRoles get roles
+func GetRoles(c context.Context, db *gorm.DB, r *http.Request, columnRoleRepo oct.UseColumnsRepo, goalieClient goalie.Goalie) ([]string, []string, error) {
+	roles, err := goalieClient.GetLoginUserRoles(c, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(roles.Roles) == 0 {
+		return nil, nil, nil
+	}
+	roleIDs := make([]string, 0)
+	for k := range roles.Roles {
+		roleIDs = append(roleIDs, roles.Roles[k].RoleID)
+	}
+	useColumns := columnRoleRepo.SelectAll(c, db, roleIDs...)
+	columnIDs := make([]string, 0)
+	useColumMap := make(map[string]string)
+	if len(useColumns) == 0 {
+		return nil, nil, nil
+	}
+	for k := range useColumns {
+		if v1, ok := useColumMap[useColumns[k].ColumnID]; !ok || v1 == "" {
+			useColumMap[useColumns[k].ColumnID] = useColumns[k].ColumnID
+			columnIDs = append(columnIDs, useColumns[k].ColumnID)
+		}
+	}
+	return columnIDs, roleIDs, nil
 }

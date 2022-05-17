@@ -75,6 +75,19 @@ func (co *Columns) GetAll(c *gin.Context) {
 	return
 }
 
+// GetByRoleID get by role
+func (co *Columns) GetByRoleID(c *gin.Context) {
+	r := new(columns.GetColumnsByRoleRequest)
+	err := c.ShouldBind(r)
+	if err != nil {
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+	all, err := co.columns.GetByRoleID(ginheader.MutateContext(c), r, c.Request, c.Writer)
+	resp.Format(all, err).Context(c)
+	return
+}
+
 // Update update name
 func (co *Columns) Update(c *gin.Context) {
 	r := new(columns.UpdateColumnRequest)

@@ -20,14 +20,13 @@ import (
 // UseColumns 使用的字段配置
 type UseColumns struct {
 	ID        string `gorm:"column:id;type:varchar(64);PRIMARY_KEY" json:"id"`
+	RoleID    string `gorm:"column:role_id;type:varchar(64)" json:"roleID"`
 	ColumnID  string `gorm:"column:column_id;type:varchar(64)" json:"columnID"`
 	CreatedAt int64  `gorm:"column:created_at;type:bigint; " json:"createdAt"`
 	UpdatedAt int64  `gorm:"column:updated_at;type:bigint; " json:"updatedAt"`
-	//1:can be see,-1:can not see
-	ViewerStatus int    `gorm:"column:viewer_status;type:int(4); " json:"viewerStatus"`
-	CreatedBy    string `gorm:"column:created_by;type:varchar(64); " json:"createBy"`
-	UpdatedBy    string `gorm:"column:updated_bt;type:varchar(64); " json:"updateBy"`
-	TenantID     string `gorm:"column:tenant_id;type:varchar(64); " json:"tenantID"`
+	CreatedBy string `gorm:"column:created_by;type:varchar(64); " json:"createBy"`
+	UpdatedBy string `gorm:"column:updated_bt;type:varchar(64); " json:"updateBy"`
+	TenantID  string `gorm:"column:tenant_id;type:varchar(64); " json:"tenantID"`
 }
 
 // TableName table name
@@ -39,6 +38,6 @@ func (UseColumns) TableName() string {
 type UseColumnsRepo interface {
 	Create(ctx context.Context, tx *gorm.DB, reqs []UseColumns) (err error)
 	Update(ctx context.Context, tx *gorm.DB, reqs []UseColumns) (err error)
-	SelectAll(ctx context.Context, db *gorm.DB, status int) (res []UseColumns)
+	SelectAll(ctx context.Context, db *gorm.DB, roleID ...string) (res []UseColumns)
 	DeleteByID(ctx context.Context, tx *gorm.DB, id ...string) error
 }

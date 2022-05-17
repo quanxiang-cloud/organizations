@@ -22,7 +22,7 @@ create table org_use_columns
     id            varchar(64) not null
         primary key,
     column_id     varchar(64) null,
-    viewer_status int(4) null,
+    role_id     varchar(64) null,
     tenant_id     varchar(64) null
 );
 
@@ -124,7 +124,7 @@ create table org_oct_use_columns
     column_id     varchar(64) null,
     created_at    bigint      null,
     updated_at    bigint      null,
-    viewer_status int(4)      null,
+    role_id     varchar(64) null,
     created_by    varchar(64) null,
     updated_bt    varchar(64) null,
     tenant_id     varchar(64) null

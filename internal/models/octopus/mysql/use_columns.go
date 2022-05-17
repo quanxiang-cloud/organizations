@@ -50,7 +50,7 @@ func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []octopus
 	return nil
 }
 
-func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int) (res []octopus.UseColumns) {
+func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, roleID ...string) (res []octopus.UseColumns) {
 	data := make([]octopus.UseColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
@@ -58,9 +58,7 @@ func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int)
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
-	if status != 0 {
-		db = db.Where("viewer_status=?", status)
-	}
+	db = db.Where("role_id in (?)", roleID)
 	affected := db.Find(&data).RowsAffected
 	if affected > 0 {
 		return data
@@ -69,7 +67,7 @@ func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int)
 }
 
 func (u *useColumnsRepo) DeleteByID(ctx context.Context, tx *gorm.DB, id ...string) (err error) {
-	return tx.Where("column_id in (?)", id).Delete(&octopus.UseColumns{}).Error
+	return tx.Where("id in (?)", id).Delete(&octopus.UseColumns{}).Error
 }
 
 //NewUseColumnsRepo 初始化

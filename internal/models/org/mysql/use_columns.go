@@ -50,7 +50,7 @@ func (u *useColumnsRepo) Update(ctx context.Context, tx *gorm.DB, reqs []org.Use
 	return nil
 }
 
-func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int) (res []org.UseColumns) {
+func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, roleID ...string) (res []org.UseColumns) {
 	data := make([]org.UseColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
 	if tenantID == "" {
@@ -58,9 +58,7 @@ func (u *useColumnsRepo) SelectAll(ctx context.Context, db *gorm.DB, status int)
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
-	if status != 0 {
-		db = db.Where("viewer_status=?", status)
-	}
+	db = db.Where("role_id in (?)", roleID)
 	affected := db.Find(&data).RowsAffected
 	if affected > 0 {
 		return data

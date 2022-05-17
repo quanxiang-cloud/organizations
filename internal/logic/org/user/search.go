@@ -173,7 +173,6 @@ func (s *Search) pushUserToSearch(user *SearchUser) {
 				department.ID = dep.ID
 				department.Name = dep.Name
 				department.PID = dep.PID
-				department.Attr = v1.Attr
 				departments.Deps = append(departments.Deps, department)
 
 				depss := s.getDepToTop(dep.PID, departments.Deps, depMap)

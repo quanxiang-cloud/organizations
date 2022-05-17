@@ -148,6 +148,7 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 	{
 		manageColumn.POST("/open", columnAPI.Open)
 		manageColumn.GET("/all", columnAPI.GetAll)
+		manageColumn.GET("/all/role", columnAPI.GetByRoleID)
 		manageColumn.PUT("/set", columnAPI.Set)
 		manageColumn.PUT("/update/name", columnAPI.Update)
 	}

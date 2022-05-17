@@ -14,6 +14,8 @@ limitations under the License.
 */
 import (
 	"context"
+	"github.com/quanxiang-cloud/organizations/internal/logic/octopus/user"
+	"github.com/quanxiang-cloud/organizations/pkg/goalie"
 	"net/http"
 
 	"github.com/go-redis/redis/v8"
@@ -35,22 +37,26 @@ type OthServer interface {
 
 // othersServer other struct
 type othersServer struct {
-	DB         *gorm.DB
-	columnRepo oct.UserTableColumnsRepo
-	conf       configs.Config
-	client     http.Client
-	extend     oct.ExtendRepo
+	DB             *gorm.DB
+	columnRepo     oct.UserTableColumnsRepo
+	conf           configs.Config
+	client         http.Client
+	extend         oct.ExtendRepo
+	columnRoleRepo oct.UseColumnsRepo
+	goalieClient   goalie.Goalie
 }
 
 // NewOtherServer new
 func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) OthServer {
 	return &othersServer{
 
-		DB:         db,
-		columnRepo: mysql3.NewUserTableColumnsRepo(),
-		conf:       conf,
-		client:     client.New(conf.InternalNet),
-		extend:     mysql3.NewExtendRepo(),
+		DB:             db,
+		columnRepo:     mysql3.NewUserTableColumnsRepo(),
+		conf:           conf,
+		client:         client.New(conf.InternalNet),
+		extend:         mysql3.NewExtendRepo(),
+		columnRoleRepo: mysql3.NewUseColumnsRepo(),
+		goalieClient:   goalie.NewGoalie(conf.InternalNet),
 	}
 }
 
@@ -98,7 +104,11 @@ func (u *othersServer) addUser(c context.Context, reqData []map[string]interface
 	}
 	if resp != nil && resp.Code == 0 {
 		_, tenantID := ginheader.GetTenantID(c).Wreck()
-		_, aliasFilter := u.columnRepo.GetFilter(c, u.DB, consts.FieldAdminStatus, consts.AliasAttr)
+		columnIDs, _, err := user.GetRoles(c, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		_, aliasFilter := u.columnRepo.GetFilter(c, u.DB, false, columnIDs...)
 		if aliasFilter != nil {
 			for k := range reqData {
 				if result.Result[k].ID != "" {
