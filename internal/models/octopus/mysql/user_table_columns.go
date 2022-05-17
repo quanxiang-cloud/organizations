@@ -92,7 +92,7 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 	return nil, 0
 }
 
-func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, self bool, id ...string) ([]octopus.UserTableColumns, map[string]string) {
+func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, attr int, self bool, id ...string) ([]octopus.UserTableColumns, map[string]string) {
 	filter := make(map[string]string)
 	useColumns := make([]octopus.UserTableColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
@@ -102,6 +102,9 @@ func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, self 
 		db = db.Where("tenant_id=?", tenantID)
 	}
 	db = db.Where("status = ?", consts.NormalStatus)
+	if attr != 0 {
+		db = db.Where("attr = ?", attr)
+	}
 	if !self {
 		if len(id) > 0 {
 			db = db.Where("id in (?)", id)

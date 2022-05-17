@@ -17,14 +17,7 @@ create table org_department
     tenant_id  varchar(64) null
 );
 
-create table org_use_columns
-(
-    id            varchar(64) not null
-        primary key,
-    column_id     varchar(64) null,
-    role_id     varchar(64) null,
-    tenant_id     varchar(64) null
-);
+
 
 create table org_user
 (
@@ -84,29 +77,6 @@ create table org_user_department_relation
     attr    varchar(64) null
 );
 
-create table org_user_table_columns
-(
-    id           varchar(64) not null
-        primary key,
-    name         varchar(64) null,
-    columns_name varchar(64) null,
-    types        varchar(64) null,
-    len          bigint null,
-    point_len    bigint null,
-    attr         bigint null,
-    status       bigint null,
-    format       varchar(64) null,
-    tenant_id    varchar(64) null,
-    created_at   bigint null,
-    updated_at   bigint null,
-    deleted_at   bigint null,
-    created_by   varchar(64) null,
-    updated_by   varchar(64) null,
-    deleted_by   varchar(64) null
-);
-
-create index columns_name
-    on org_user_table_columns (columns_name);
 
 create table org_user_tenant_relation
 (

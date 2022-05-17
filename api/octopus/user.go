@@ -61,7 +61,7 @@ func (u *UserAPI) Add(c *gin.Context) {
 	r.UserInfo = data
 	response, err := u.user.Add(ginheader.MutateContext(c), r, c.Request)
 	if err != nil {
-		c.Writer.WriteHeader(http.StatusBadRequest)
+		resp.Format(nil, err).Context(c)
 		return
 	}
 	core.DealResponse(c.Writer, response.Response)
@@ -81,7 +81,7 @@ func (u *UserAPI) Update(c *gin.Context) {
 
 	response, err := u.user.Update(ginheader.MutateContext(c), r, c.Request)
 	if err != nil {
-		c.Writer.WriteHeader(http.StatusBadRequest)
+		resp.Format(nil, err).Context(c)
 		return
 	}
 	core.DealResponse(c.Writer, response.Response)

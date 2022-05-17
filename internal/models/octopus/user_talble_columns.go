@@ -52,7 +52,7 @@ type UserTableColumnsRepo interface {
 	GetAll(ctx context.Context, db *gorm.DB, status int, name string) (list []UserTableColumns, total int64)
 	SelectByID(ctx context.Context, db *gorm.DB, id string) (res *UserTableColumns)
 	SelectByIDAndName(ctx context.Context, db *gorm.DB, id, name string) (res *UserTableColumns)
-	GetFilter(ctx context.Context, db *gorm.DB, self bool, id ...string) ([]UserTableColumns, map[string]string)
+	GetFilter(ctx context.Context, db *gorm.DB, attr int, self bool, id ...string) ([]UserTableColumns, map[string]string)
 	GetXlsxField(ctx context.Context, db *gorm.DB, status int) map[string]string
 	GetByName(ctx context.Context, db *gorm.DB, name string) *UserTableColumns
 	GetByColumnName(ctx context.Context, db *gorm.DB, columName string) *UserTableColumns

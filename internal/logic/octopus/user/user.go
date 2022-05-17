@@ -16,6 +16,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	error2 "github.com/quanxiang-cloud/cabin/error"
+	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/goalie"
 	"io"
 	"net/http"
@@ -26,7 +28,6 @@ import (
 	"github.com/tealeg/xlsx"
 	"gorm.io/gorm"
 
-	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/cabin/tailormade/client"
 	ginheader "github.com/quanxiang-cloud/cabin/tailormade/header"
@@ -34,7 +35,6 @@ import (
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/consts"
 	oct "github.com/quanxiang-cloud/organizations/internal/models/octopus"
 	mysql3 "github.com/quanxiang-cloud/organizations/internal/models/octopus/mysql"
-	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	ldap "github.com/quanxiang-cloud/organizations/pkg/ladp"
 	"github.com/quanxiang-cloud/organizations/pkg/message"
@@ -115,7 +115,10 @@ func (u *user) Add(ctx context.Context, req *AddUserRequest, r *http.Request) (*
 		if err != nil {
 			return nil, err
 		}
-		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, false, columnIDs...)
+		if len(columnIDs) == 0 {
+			return nil, error2.New(code.ErrNoPower)
+		}
+		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.AliasAttr, false, columnIDs...)
 		if aliasFilter != nil {
 			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
@@ -158,13 +161,21 @@ func (u *user) Update(ctx context.Context, req *UpdateUserRequest, r *http.Reque
 		if err != nil {
 			return nil, err
 		}
-		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, false, columnIDs...)
+		if len(columnIDs) == 0 {
+			return nil, error2.New(code.ErrNoPower)
+		}
+		_, aliasFilter := u.columnRepo.GetFilter(ctx, u.DB, consts.AliasAttr, false, columnIDs...)
 		if aliasFilter != nil {
 			tx := u.DB.Begin()
 			core.Filter(&req.UserInfo, aliasFilter, core.IN)
 			extend := &oct.Extend{}
 			extend.ID = in.ID
-			err = u.extend.UpdateByID(u.DB, tx, tenantID, extend, req.UserInfo)
+			old := u.extend.SelectByID(u.DB, tenantID, in.ID)
+			if old == nil {
+				err = u.extend.Insert(u.DB, tx, tenantID, req.UserInfo)
+			} else {
+				err = u.extend.UpdateByID(u.DB, tx, tenantID, extend, req.UserInfo)
+			}
 			if err != nil {
 				tx.Rollback()
 				return nil, err
@@ -253,7 +264,7 @@ func (u *user) AdminSelectByID(ctx context.Context, req *SearchOneUserRequest, r
 		if err != nil {
 			return nil, err
 		}
-		_, filter := u.columnRepo.GetFilter(ctx, u.DB, req.ID == r.Header.Get("User-Id"), columnIDs...)
+		_, filter := u.columnRepo.GetFilter(ctx, u.DB, consts.AliasAttr, req.ID == r.Header.Get("User-Id"), columnIDs...)
 		if filter != nil {
 			core.Filter(&old, filter, core.OUT)
 			for k, v1 := range old {
@@ -301,10 +312,10 @@ func (u *user) UserSelectByID(ctx context.Context, req *ViewerSearchOneUserReque
 		}
 		filter := make(map[string]string)
 		if len(columnIDs) > 0 {
-			_, filter = u.columnRepo.GetFilter(ctx, u.DB, r.Header.Get("User-Id") == req.ID, columnIDs...)
+			_, filter = u.columnRepo.GetFilter(ctx, u.DB, consts.AliasAttr, r.Header.Get("User-Id") == req.ID, columnIDs...)
 		}
 		if r.Header.Get("User-Id") == req.ID {
-			_, filter = u.columnRepo.GetFilter(ctx, u.DB, true, columnIDs...)
+			_, filter = u.columnRepo.GetFilter(ctx, u.DB, consts.AllAttr, true, columnIDs...)
 		}
 		if len(filter) > 0 {
 			core.Filter(&old, filter, core.OUT)
@@ -341,31 +352,13 @@ type GetTemplateFileResponse struct {
 
 // Template get xlsx template
 func (u *user) Template(c context.Context, req *GetTemplateFileRequest, r *http.Request) (*GetTemplateFileResponse, error) {
-	if r.URL.RawQuery == "" {
-		r.URL.RawQuery = "octopus=1"
-	} else {
-		r.URL.RawQuery = r.URL.RawQuery + "&octopus=1"
-	}
-	req.Octopus = 1
-	response, err := core.DealRequest(u.client, u.conf.OrgHost, r, req)
-	if err != nil {
-		return nil, err
-	}
 	fileResponse := &GetTemplateFileResponse{}
-	_, err = core.DeserializationResp(c, response, fileResponse)
-	if err != nil {
-		return nil, err
-	}
-	if len(fileResponse.ExcelColumn) == 0 {
-		return nil, error2.New(code.FieldNameIsNull)
-	}
 	xlsxFields := u.columnRepo.GetXlsxField(c, u.DB, consts.FieldAdminStatus)
 	if len(xlsxFields) > 0 {
 		for k, v := range fileResponse.ExcelColumn {
 			xlsxFields[k] = v
 		}
 	}
-
 	newFile := xlsx.NewFile()
 	sheet, err := newFile.AddSheet("sheet1")
 	if err != nil {

@@ -256,7 +256,6 @@ func (suite *UserSuite) TestAdminSelectByID() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 	}
 	res, err := suite.user.AdminSelectByID(suite.Ctx, rq)
@@ -291,7 +290,6 @@ func (suite *UserSuite) TestUserSelectByID() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 	}
 	res, err := suite.user.UserSelectByID(suite.Ctx, rq)
@@ -303,7 +301,6 @@ func (suite *UserSuite) TestUpdateUserStatus() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -325,7 +322,6 @@ func (suite *UserSuite) TestUpdateUserStatus() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -339,7 +335,6 @@ func (suite *UserSuite) TestUpdateUsersStatus() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -361,7 +356,6 @@ func (suite *UserSuite) TestUpdateUsersStatus() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -375,7 +369,6 @@ func (suite *UserSuite) TestAdminChangeUsersDEP() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -398,7 +391,6 @@ func (suite *UserSuite) TestAdminChangeUsersDEP() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -412,7 +404,6 @@ func (suite *UserSuite) TestOthGetOneUser() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -436,7 +427,6 @@ func (suite *UserSuite) TestOthGetOneUser() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -446,42 +436,10 @@ func (suite *UserSuite) TestOthGetOneUser() {
 	assert.NotNil(suite.T(), res)
 }
 
-func (suite *UserSuite) TestTemplate() {
-	ctl := gomock.NewController(suite.t)
-	defer ctl.Finish()
-
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
-	depRepo := mock.NewMockDepartmentRepo(ctl)
-	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
-	userRepo := mock.NewMockUserRepo(ctl)
-	userLeaderRepo := mock.NewMockUserLeaderRelationRepo(ctl)
-	accountRepo := mock.NewMockAccountRepo(ctl)
-
-	gomock.InOrder(
-		columnRepo.EXPECT().GetXlsxField(gomock.Any(), gomock.Any(), gomock.Any()),
-	)
-
-	rq := &GetTemplateFileRequest{}
-	suite.user = &user{
-		DB:             suite.db,
-		userRepo:       userRepo,
-		userDepRepo:    userDepRepo,
-		depRepo:        depRepo,
-		columnRepo:     columnRepo,
-		userLeaderRepo: userLeaderRepo,
-		accountReo:     accountRepo,
-		redisClient:    suite.redisClient,
-	}
-	res, err := suite.user.Template(suite.Ctx, rq)
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), res)
-}
-
 func (suite *UserSuite) TestIndexCount() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -499,7 +457,6 @@ func (suite *UserSuite) TestIndexCount() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -513,7 +470,6 @@ func (suite *UserSuite) TestRegister() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
 
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -541,7 +497,6 @@ func (suite *UserSuite) TestRegister() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
@@ -558,8 +513,6 @@ func (suite *UserSuite) TestRegister() {
 func (suite *UserSuite) TestGetUsersByIDs() {
 	ctl := gomock.NewController(suite.t)
 	defer ctl.Finish()
-
-	columnRepo := mock.NewMockUserTableColumnsRepo(ctl)
 	depRepo := mock.NewMockDepartmentRepo(ctl)
 	userDepRepo := mock.NewMockUserDepartmentRelationRepo(ctl)
 	userRepo := mock.NewMockUserRepo(ctl)
@@ -582,7 +535,6 @@ func (suite *UserSuite) TestGetUsersByIDs() {
 		userRepo:       userRepo,
 		userDepRepo:    userDepRepo,
 		depRepo:        depRepo,
-		columnRepo:     columnRepo,
 		userLeaderRepo: userLeaderRepo,
 		accountReo:     accountRepo,
 		redisClient:    suite.redisClient,
