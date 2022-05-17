@@ -38,6 +38,7 @@ import (
 // Columns columns interface
 type Columns interface {
 	GetAll(ctx context.Context, req *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error)
+	GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest, r *http.Request, w http.ResponseWriter) (*GetColumnsByRoleResponse, error)
 	Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error)
 	Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error)
 	Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error)
@@ -265,6 +266,7 @@ type ColumnResponse struct {
 	Attr         int    `json:"attr"`
 	ViewerStatus int    `json:"viewerStatus"` //home 1 can see ,-1 can not set
 	Format       string `json:"format"`
+	Flag         int    `json:"flag,omitempty"`
 }
 
 // GetAll get all column
@@ -283,8 +285,6 @@ func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *htt
 		all.All = append(all.All, columnsResponse.All...)
 	}
 	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, data.Status, data.Name)
-	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, 0)
-
 	for k := range tableColumns {
 		if tableColumns[k].ColumnsName == consts.TENANTID {
 			continue
@@ -301,31 +301,16 @@ func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *htt
 		res.Format = tableColumns[k].Format
 		all.All = append(all.All, res)
 	}
-	if len(all.All) > 0 {
-		for k := range all.All {
-			for k1, v1 := range useColumns {
-				if all.All[k].ID == v1.ColumnID {
-					all.All[k].Status = useStatus
-					all.All[k].ViewerStatus = useColumns[k1].ViewerStatus
-				}
-			}
-		}
-	}
 
 	return all, nil
 }
 
 // SetUseColumnsRequest req set use columns
 type SetUseColumnsRequest struct {
-	Add       []SetUseColumn `json:"add"`
-	Delete    []string       `json:"delete"`
-	CreatedBy string
-}
-
-// SetUseColumn set will use column
-type SetUseColumn struct {
-	ColumnID     string `json:"columnID"`
-	ViewerStatus int    `json:"viewerStatus"`
+	RoleID    string   `json:"roleID"`
+	Add       []string `json:"add"`
+	Delete    []string `json:"delete"`
+	CreatedBy string   `json:"-"`
 }
 
 // SetUseColumnsResponse req set use columns
@@ -339,23 +324,13 @@ func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Re
 	for k := range all {
 		aliasColumnMap[all[k].ID] = &all[k]
 	}
-	systemsColumns := make([]SetUseColumn, 0)
-	aliasClolumns := make([]SetUseColumn, 0)
-	for k := range req.Add {
-		if v, ok := aliasColumnMap[req.Add[k].ColumnID]; ok && v != nil {
-			aliasClolumns = append(aliasClolumns, req.Add[k])
-		} else {
-			systemsColumns = append(systemsColumns, req.Add[k])
-		}
-	}
 	var flag = false
 	request := SetUseColumnsRequest{}
-	if len(systemsColumns) > 0 {
-		request.Add = systemsColumns
-		request.Delete = req.Delete
-	} else {
-		flag = true
-	}
+
+	request.Add = req.Add
+	request.Delete = req.Delete
+	request.RoleID = req.RoleID
+
 	response, err := core.DealRequest(c.client, c.conf.OrgHost, r, request)
 	if err != nil {
 		return nil, err
@@ -372,29 +347,56 @@ func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Re
 		return nil, nil
 	}
 	if flag {
-		tx := c.DB.Begin()
-		useColumns := make([]oct.UseColumns, 0)
-		if len(aliasClolumns) > 0 {
-			unix := time.NowUnix()
-			for k := range aliasClolumns {
-				useColumn := oct.UseColumns{}
-				useColumn.ID = id.HexUUID(true)
-				useColumn.ColumnID = aliasClolumns[k].ColumnID
-				useColumn.ViewerStatus = aliasClolumns[k].ViewerStatus
-				useColumn.UpdatedBy = req.CreatedBy
-				useColumn.UpdatedAt = unix
-				useColumn.CreatedBy = req.CreatedBy
-				useColumn.CreatedAt = unix
-				useColumns = append(useColumns, useColumn)
-				req.Delete = append(req.Delete, req.Add[k].ColumnID)
+		adds := make([]string, 0)
+		deletes := make([]string, 0)
+		for k := range req.Add {
+			if v, ok := aliasColumnMap[req.Add[k]]; ok && v != nil {
+				adds = append(adds, req.Add[k])
 			}
 		}
-		if len(req.Delete) > 0 {
-			err := c.useColumnsRepo.DeleteByID(ctx, tx, req.Delete...)
-			if err != nil {
-				tx.Rollback()
-				return nil, err
+		for k := range req.Delete {
+			if v, ok := aliasColumnMap[req.Delete[k]]; ok && v != nil {
+				deletes = append(deletes, req.Delete[k])
 			}
+		}
+		useColumnsRelation := c.useColumnsRepo.SelectAll(ctx, c.DB, req.RoleID)
+		useMap := make(map[string]string)
+		for k := range useColumnsRelation {
+			useMap[useColumnsRelation[k].ColumnID] = useColumnsRelation[k].ID
+		}
+		tx := c.DB.Begin()
+		useColumns := make([]oct.UseColumns, 0)
+		if len(adds) > 0 {
+			unix := time.NowUnix()
+			for k := range adds {
+				if v1, ok := useMap[adds[k]]; !ok || v1 == "" {
+					useColumn := oct.UseColumns{}
+					useColumn.ID = id.HexUUID(true)
+					useColumn.ColumnID = req.Add[k]
+					useColumn.RoleID = req.RoleID
+
+					useColumn.UpdatedAt = unix
+					useColumn.CreatedBy = req.CreatedBy
+					useColumn.CreatedAt = unix
+					useColumns = append(useColumns, useColumn)
+				}
+			}
+		}
+		if len(deletes) > 0 {
+			del := make([]string, 0)
+			for k := range deletes {
+				if v1, ok := useMap[deletes[k]]; ok && v1 != "" {
+					del = append(del, useMap[deletes[k]])
+				}
+			}
+			if len(del) > 0 {
+				err := c.useColumnsRepo.DeleteByID(ctx, tx, del...)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+			}
+
 		}
 		if len(useColumns) > 0 {
 			err := c.useColumnsRepo.Create(ctx, tx, useColumns)
@@ -452,4 +454,68 @@ func (c *columns) Open(ctx context.Context, req *OpenColumnRequest, r *http.Requ
 	tx.Commit()
 
 	return openColumnResponse, nil
+}
+
+// GetColumnsByRoleRequest get column request by role
+type GetColumnsByRoleRequest struct {
+	RoleID string `json:"roleID" form:"roleID"`
+}
+
+// GetColumnsByRoleResponse get column response by role
+type GetColumnsByRoleResponse struct {
+	All []ColumnResponse `json:"all"`
+}
+
+// about web check box select
+const (
+	Selected = iota + 1
+	UnSelected
+)
+
+// GetByRoleID get all column by role
+func (c *columns) GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest, r *http.Request, w http.ResponseWriter) (*GetColumnsByRoleResponse, error) {
+	resp, err := core.DealRequest(c.client, c.conf.OrgHost, r, req)
+	if err != nil {
+		return nil, err
+	}
+	columnsResponse := &GetColumnsByRoleResponse{}
+	_, err = core.DeserializationResp(ctx, resp, columnsResponse)
+	if err != nil {
+		return nil, err
+	}
+	all := &GetColumnsByRoleResponse{}
+	if len(columnsResponse.All) > 0 {
+		all.All = append(all.All, columnsResponse.All...)
+	}
+	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, consts.NormalStatus, "")
+	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, req.RoleID)
+	columIDMap := make(map[string]string)
+	for k := range useColumns {
+		columIDMap[useColumns[k].ColumnID] = useColumns[k].ColumnID
+	}
+	for k := range tableColumns {
+		if tableColumns[k].ColumnsName == consts.TENANTID {
+			continue
+		}
+		response := ColumnResponse{}
+		response.ID = tableColumns[k].ID
+		response.Name = tableColumns[k].Name
+		response.ColumnName = tableColumns[k].ColumnsName
+		response.Len = tableColumns[k].Len
+		response.PointLen = tableColumns[k].PointLen
+		response.Types = tableColumns[k].Types
+		response.Status = unUseStatus
+		response.Attr = tableColumns[k].Attr
+		response.Format = tableColumns[k].Format
+		response.Flag = UnSelected
+		all.All = append(all.All, response)
+	}
+	if len(all.All) > 0 {
+		for k := range all.All {
+			if v1, ok := columIDMap[all.All[k].ID]; ok && v1 != "" {
+				all.All[k].Flag = Selected
+			}
+		}
+	}
+	return all, nil
 }

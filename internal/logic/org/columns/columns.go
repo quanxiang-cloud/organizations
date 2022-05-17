@@ -15,7 +15,6 @@ limitations under the License.
 import (
 	"context"
 	"errors"
-
 	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 
@@ -32,6 +31,7 @@ import (
 // Columns interface
 type Columns interface {
 	GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllColumnsResponse, error)
+	GetByRoleID(ctx context.Context, r *GetColumnsByRoleRequest) (*GetColumnsByRoleResponse, error)
 	Update(ctx context.Context, r *UpdateColumnRequest) (*UpdateColumnResponse, error)
 	Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error)
 	Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnResponse, error)
@@ -124,17 +124,16 @@ type ColumnResponse struct {
 	Len        int    `json:"len"`
 	PointLen   int    `json:"pointLen"`
 	//1:use,-1:no use
-	Status int `json:"status"`
+	Status int `json:"status,omitempty"`
 	//1:sys,2:alias
-	Attr         int    `json:"attr"`
-	ViewerStatus int    `json:"viewerStatus"` //home 1 can see ,-1 can not set
-	Format       string `json:"format"`
+	Attr   int    `json:"attr"`
+	Format string `json:"format,omitempty"`
+	Flag   int    `json:"flag,omitempty"`
 }
 
 // GetAll get all column
 func (c *columns) GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllColumnsResponse, error) {
 	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, r.Status, r.Name)
-	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, 0)
 
 	all := &GetAllColumnsResponse{}
 	for k := range tableColumns {
@@ -153,29 +152,14 @@ func (c *columns) GetAll(ctx context.Context, r *GetAllColumnsRequest) (*GetAllC
 		response.Format = tableColumns[k].Format
 		all.All = append(all.All, response)
 	}
-	if len(all.All) > 0 {
-		for k := range all.All {
-			for k1, v1 := range useColumns {
-				if all.All[k].ID == v1.ColumnID {
-					all.All[k].Status = useStatus
-					all.All[k].ViewerStatus = useColumns[k1].ViewerStatus
-				}
-			}
-		}
-	}
 	return all, nil
 }
 
 // SetUseColumnsRequest req set use columns
 type SetUseColumnsRequest struct {
-	Add    []SetUseColumn `json:"add"`
-	Delete []string       `json:"delete"`
-}
-
-// SetUseColumn set will use column
-type SetUseColumn struct {
-	ColumnID     string `json:"columnID"`
-	ViewerStatus int    `json:"viewerStatus"`
+	RoleID string   `json:"roleID"`
+	Add    []string `json:"add"`
+	Delete []string `json:"delete"`
 }
 
 // SetUseColumnsResponse req set use columns
@@ -184,29 +168,53 @@ type SetUseColumnsResponse struct {
 
 // Set set use column
 func (c *columns) Set(ctx context.Context, r *SetUseColumnsRequest) (*SetUseColumnsResponse, error) {
-
+	all, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
+	columnMap := make(map[string]*org.UserTableColumns)
+	for k := range all {
+		columnMap[all[k].ID] = &all[k]
+	}
+	useAll := c.useColumnsRepo.SelectAll(ctx, c.DB, r.RoleID)
+	useMap := make(map[string]*org.UseColumns)
+	for k := range useAll {
+		useMap[useAll[k].ColumnID] = &useAll[k]
+	}
 	tx := c.DB.Begin()
-	useColumns := make([]org.UseColumns, 0)
+	adds := make([]org.UseColumns, 0)
 	if len(r.Add) > 0 {
-
+		add := make([]string, 0)
 		for k := range r.Add {
-			useColumn := org.UseColumns{}
-			useColumn.ID = id.HexUUID(true)
-			useColumn.ColumnID = r.Add[k].ColumnID
-			useColumn.ViewerStatus = r.Add[k].ViewerStatus
-			useColumns = append(useColumns, useColumn)
-			r.Delete = append(r.Delete, r.Add[k].ColumnID)
+			if v1, ok := columnMap[r.Add[k]]; ok && v1 != nil {
+				add = append(add, r.Add[k])
+			}
+		}
+		for k := range add {
+			if v1, ok := useMap[add[k]]; !ok || v1 == nil {
+				useColumn := org.UseColumns{}
+				useColumn.ID = id.HexUUID(true)
+				useColumn.ColumnID = add[k]
+				useColumn.RoleID = r.RoleID
+				adds = append(adds, useColumn)
+			}
 		}
 	}
 	if len(r.Delete) > 0 {
-		err := c.useColumnsRepo.DeleteByID(ctx, tx, r.Delete...)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
+		del := make([]string, 0)
+		for k := range r.Delete {
+			if v1, ok := useMap[r.Delete[k]]; ok && v1 != nil {
+				del = append(del, useMap[r.Delete[k]].ID)
+			}
 		}
+		if len(del) > 0 {
+			err := c.useColumnsRepo.DeleteByID(ctx, tx, del...)
+			if err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+		}
+
 	}
-	if len(useColumns) > 0 {
-		err := c.useColumnsRepo.Create(ctx, tx, useColumns)
+	if len(adds) > 0 {
+		err := c.useColumnsRepo.Create(ctx, tx, adds)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
@@ -252,6 +260,7 @@ func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnRe
 			useColumn := org.UseColumns{}
 			useColumn.ID = id.HexUUID(true)
 			useColumn.ColumnID = tableColumns.ID
+			useColumn.RoleID = "1"
 
 			useColumns = append(useColumns, useColumn)
 			if err != nil {
@@ -263,7 +272,7 @@ func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnRe
 		tx.Rollback()
 		return nil, errors.New("columns field value err")
 	}
-	err := c.useColumnsRepo.Update(ctx, tx, useColumns)
+	err := c.useColumnsRepo.Create(ctx, tx, useColumns)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -272,4 +281,56 @@ func (c *columns) Open(ctx context.Context, r *OpenColumnRequest) (*OpenColumnRe
 	tx.Commit()
 
 	return nil, nil
+}
+
+// GetColumnsByRoleRequest get column request by role
+type GetColumnsByRoleRequest struct {
+	RoleID string `json:"roleID" form:"roleID"`
+}
+
+// GetColumnsByRoleResponse get column response by role
+type GetColumnsByRoleResponse struct {
+	All []ColumnResponse `json:"all"`
+}
+
+// about web check box select
+const (
+	Selected = iota + 1
+	UnSelected
+)
+
+// GetByRoleID get all column by role
+func (c *columns) GetByRoleID(ctx context.Context, r *GetColumnsByRoleRequest) (*GetColumnsByRoleResponse, error) {
+	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, consts.NormalStatus, "")
+	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, r.RoleID)
+	columIDMap := make(map[string]string)
+	for k := range useColumns {
+		columIDMap[useColumns[k].ColumnID] = useColumns[k].ColumnID
+	}
+	all := &GetColumnsByRoleResponse{}
+	for k := range tableColumns {
+		if tableColumns[k].ColumnsName == consts.TENANTID {
+			continue
+		}
+		response := ColumnResponse{}
+		response.ID = tableColumns[k].ID
+		response.Name = tableColumns[k].Name
+		response.ColumnName = tableColumns[k].ColumnsName
+		response.Len = tableColumns[k].Len
+		response.PointLen = tableColumns[k].PointLen
+		response.Types = tableColumns[k].Types
+		response.Status = unUseStatus
+		response.Attr = tableColumns[k].Attr
+		response.Format = tableColumns[k].Format
+		response.Flag = UnSelected
+		all.All = append(all.All, response)
+	}
+	if len(all.All) > 0 {
+		for k := range all.All {
+			if v1, ok := columIDMap[all.All[k].ID]; ok && v1 != "" {
+				all.All[k].Flag = Selected
+			}
+		}
+	}
+	return all, nil
 }

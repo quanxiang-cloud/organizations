@@ -118,7 +118,7 @@ func (u *UserAPI) UserUserInfo(c *gin.Context) {
 
 	response, err := u.user.UserSelectByID(ginheader.MutateContext(c), r, c.Request)
 	if err != nil {
-		c.Writer.WriteHeader(http.StatusBadRequest)
+		resp.Format(nil, err).Context(c)
 		return
 	}
 	core.DealResponse(c.Writer, response.Response)

@@ -223,7 +223,7 @@ type GetUserByIDsRequest struct {
 
 // GetUserByIDsResponse get user by ids response
 type GetUserByIDsResponse struct {
-	Users []user.ViewerSearchOneUserResponse `json:"users"`
+	Users []user.SearchOneUserResponse `json:"users"`
 }
 
 //GetUserByIDs get user info by ids
@@ -249,7 +249,7 @@ func (u *othersServer) GetUserByIDs(c context.Context, rq *GetUserByIDsRequest) 
 			if v, ok := userDep[res.Users[k].ID]; ok {
 				for k1 := range v {
 					responses := make([]user.DepOneResponse, 0)
-					res.Users[k].Dep = append(res.Users[k].Dep, user.FindDepToTop(depMap, v[k1], responses))
+					res.Users[k].DEP = append(res.Users[k].DEP, user.FindDepToTop(depMap, v[k1], responses))
 				}
 
 			}
@@ -627,7 +627,7 @@ type GetOneRequest struct {
 
 // GetOneResponse get one response
 type GetOneResponse struct {
-	User user.ViewerSearchOneUserResponse `json:"user"`
+	User user.SearchOneUserResponse `json:"user"`
 }
 
 // GetOneUser get one user info
@@ -635,7 +635,7 @@ func (u *othersServer) GetOneUser(c context.Context, r *GetOneRequest) (*GetOneR
 
 	userBtye := u.redisClient.Get(c, consts.RedisTokenUserInfo+r.ID).Val()
 	res := GetOneResponse{}
-	resUser := user.ViewerSearchOneUserResponse{}
+	resUser := user.SearchOneUserResponse{}
 	if userBtye != "" {
 		err := json.Unmarshal([]byte(userBtye), &resUser)
 		if err != nil {
@@ -668,7 +668,7 @@ func (u *othersServer) GetOneUser(c context.Context, r *GetOneRequest) (*GetOneR
 			if len(departments) > 0 {
 				for _, v := range departments {
 					responses := make([]user.DepOneResponse, 0)
-					resUser.Dep = append(resUser.Dep, user.FindDepToTop(depMap, v.ID, responses))
+					resUser.DEP = append(resUser.DEP, user.FindDepToTop(depMap, v.ID, responses))
 				}
 
 			}
@@ -711,7 +711,7 @@ type UserAllRequest struct {
 
 // UserAllResp get all user response
 type UserAllResp struct {
-	All []user.ViewerSearchOneUserResponse `json:"all"`
+	All []user.SearchOneUserResponse `json:"all"`
 }
 
 // GetAllUsers get all user
@@ -735,7 +735,7 @@ func (u *othersServer) GetAllUsers(c context.Context, r *UserAllRequest) (res *U
 		}
 		allUser := new(UserAllResp)
 		for k := range userList {
-			oneUser := user.ViewerSearchOneUserResponse{}
+			oneUser := user.SearchOneUserResponse{}
 			oneUser.ID = userList[k].ID
 			oneUser.Name = userList[k].Name
 			oneUser.Email = userList[k].Email
@@ -754,7 +754,7 @@ func (u *othersServer) GetAllUsers(c context.Context, r *UserAllRequest) (res *U
 							Grade:     department.Grade,
 							Attr:      department.Attr,
 						}
-						oneUser.Dep = append(oneUser.Dep, []user.DepOneResponse{departmentResp})
+						oneUser.DEP = append(oneUser.DEP, []user.DepOneResponse{departmentResp})
 					}
 				}
 
@@ -776,7 +776,7 @@ type GetUsersByDepIDRequest struct {
 
 // GetUsersByDepIDResponse get users by ids response
 type GetUsersByDepIDResponse struct {
-	Users []user.ViewerSearchOneUserResponse `json:"users"`
+	Users []user.SearchOneUserResponse `json:"users"`
 }
 
 const includeChildDep = 1
@@ -827,7 +827,7 @@ func (u *othersServer) getChildDep(c context.Context, pid string, depMap map[str
 }
 
 // GetUserLeader get user leader
-func GetUserLeader(c context.Context, userRepo org.UserRepo, userLeaderRepo org.UserLeaderRelationRepo, db *gorm.DB, userIDs ...string) []user.ViewerSearchOneUserResponse {
+func GetUserLeader(c context.Context, userRepo org.UserRepo, userLeaderRepo org.UserLeaderRelationRepo, db *gorm.DB, userIDs ...string) []user.SearchOneUserResponse {
 	users := userRepo.List(c, db, userIDs...)
 	leaderRelations := userLeaderRepo.SelectByUserIDs(db, userIDs...)
 	ud := make(map[string][]string)
@@ -841,9 +841,9 @@ func GetUserLeader(c context.Context, userRepo org.UserRepo, userLeaderRepo org.
 	for k := range leaderList {
 		leaderMap[leaderList[k].ID] = leaderList[k]
 	}
-	responses := make([]user.ViewerSearchOneUserResponse, 0)
+	responses := make([]user.SearchOneUserResponse, 0)
 	for k := range users {
-		resp := user.ViewerSearchOneUserResponse{}
+		resp := user.SearchOneUserResponse{}
 		resp.ID = users[k].ID
 		resp.Name = users[k].Name
 		resp.Email = users[k].Email

@@ -18,6 +18,7 @@ import (
 	"errors"
 	"github.com/quanxiang-cloud/organizations/internal/logic/org/department"
 	"github.com/quanxiang-cloud/organizations/pkg/component/event"
+	"github.com/quanxiang-cloud/organizations/pkg/goalie"
 	"net/http"
 	"strings"
 	"time"
@@ -51,8 +52,8 @@ type User interface {
 	Update(c context.Context, r *UpdateUserRequest) (*UpdateUserResponse, error)
 	UpdateAvatar(c context.Context, r *UpdateUserAvatarRequest) (*UpdateUserAvatarResponse, error)
 	PageList(c context.Context, r *SearchListUserRequest) (*page.Page, error)
-	AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*SearchOneUserResponse, error)
-	UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) (*ViewerSearchOneUserResponse, error)
+	AdminSelectByID(c context.Context, req *SearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error)
+	UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error)
 	UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusResponse, error)
 	UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*ListStatusResponse, error)
 	AdminChangeUsersDEP(c context.Context, r *ChangeUsersDEPRequest) (*ChangeUsersDEPResponse, error)
@@ -76,8 +77,10 @@ type user struct {
 	ldap           ldap.Ldap
 	conf           configs.Config
 	columnRepo     org.UserTableColumnsRepo
+	columnRoleRepo org.UseColumnsRepo
 	userTenantRepo org.UserTenantRelationRepo
 	landlord       landlord.Landlord
+	goalieClient   goalie.Goalie
 }
 
 //NewUser new
@@ -97,8 +100,10 @@ func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient
 
 		conf:           conf,
 		columnRepo:     mysql2.NewUserTableColumnsRepo(),
+		columnRoleRepo: mysql2.NewUseColumnsRepo(),
 		userTenantRepo: mysql2.NewUserTenantRelationRepo(),
 		landlord:       landlord.NewLandlord(conf.InternalNet),
+		goalieClient:   goalie.NewGoalie(conf.InternalNet),
 	}
 }
 
@@ -689,56 +694,22 @@ type SearchOneUserResponse struct {
 	Source string             `json:"source,omitempty" `
 	DEP    [][]DepOneResponse `json:"dep,omitempty"`
 	Leader [][]Leader         `json:"leader,omitempty"`
+	// 0x1111 right first 0:need reset password
+	Status int `json:"status,omitempty"`
+	//RolIDs []string `json:"rolIDs,omitempty"`
 }
 
 // AdminSelectByID 管理员根据ID查询人员
-func (u *user) AdminSelectByID(c context.Context, r *SearchOneUserRequest) (*SearchOneUserResponse, error) {
-	old := u.userRepo.Get(c, u.DB, r.ID)
-
-	if old != nil {
-		_, filter := u.columnRepo.GetFilter(c, u.DB, consts.FieldAdminStatus, consts.AllAttr)
-		if filter != nil {
-			Filter(old, filter, OUT)
-		}
-		resUser := SearchOneUserResponse{}
-		resUser.ID = old.ID
-		resUser.Name = old.Name
-		resUser.Phone = old.Phone
-		resUser.Email = old.Email
-		resUser.SelfEmail = old.SelfEmail
-		resUser.UseStatus = old.UseStatus
-		resUser.Position = old.Position
-		resUser.Avatar = old.Avatar
-		resUser.JobNumber = old.JobNumber
-		resUser.Gender = old.Gender
-		//从当前部门一直找到顶层部门组装
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
-		depMap := make(map[string]*org.Department)
-		for k := range list {
-			depMap[list[k].ID] = &list[k]
-		}
-		departmentRelations := u.userDepRepo.SelectByUserIDs(u.DB, old.ID)
-		depIDs := make([]string, 0)
-		for k := range departmentRelations {
-			depIDs = append(depIDs, departmentRelations[k].DepID)
-		}
-		departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
-
-		if len(departments) > 0 {
-			for k := range departments {
-				responses := make([]DepOneResponse, 0)
-				resUser.DEP = append(resUser.DEP, FindDepToTop(depMap, departments[k].ID, responses))
-			}
-
-		}
-		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
-		if err == nil && leader != nil {
-			resUser.Leader = append(resUser.Leader, leader...)
-		}
-
-		return &resUser, nil
+func (u *user) AdminSelectByID(c context.Context, req *SearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error) {
+	info, err := GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, u.columnRepo, u.columnRoleRepo,
+		u.goalieClient, req.ID, r)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	if info != nil {
+		info.Status = 0
+	}
+	return info, nil
 }
 
 // ViewerSearchOneUserRequest 查询一个
@@ -746,39 +717,56 @@ type ViewerSearchOneUserRequest struct {
 	ID string `json:"id" form:"id"  binding:"required,max=64"`
 }
 
-// ViewerSearchOneUserResponse 用户可见字段
-type ViewerSearchOneUserResponse struct {
-	ID        string `json:"id,omitempty" `
-	Name      string `json:"name,omitempty" `
-	Phone     string `json:"phone,omitempty" `
-	Email     string `json:"email,omitempty" `
-	SelfEmail string `json:"selfEmail,omitempty" `
-	IDCard    string `json:"idCard,omitempty" `
-	Address   string `json:"address,omitempty" `
-	//1:normal，-2:invalid，-1:del，2:active,-3:no word
-	UseStatus int    `json:"useStatus,omitempty" `
-	Position  string `json:"position,omitempty" `
-	Avatar    string `json:"avatar,omitempty" `
-	JobNumber string `json:"jobNumber,omitempty" `
-	//0:null,1:man,2:woman
-	Gender int                `json:"gender,omitempty" `
-	Source string             `json:"source,omitempty" `
-	Dep    [][]DepOneResponse `json:"deps,omitempty"`
-	Leader [][]Leader         `json:"leaders,omitempty"`
-	// 0x1111 right first 0:need reset password
-	Status int `json:"status"`
+// UserSelectByID user get by id
+func (u *user) UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error) {
+	return GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, u.columnRepo, u.columnRoleRepo,
+		u.goalieClient, req.ID, r)
 }
 
-// UserSelectByID user get by id
-func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) (*ViewerSearchOneUserResponse, error) {
-	old := u.userRepo.Get(c, u.DB, r.ID)
+// GetRoles get roles
+func GetRoles(c context.Context, db *gorm.DB, r *http.Request, columnRoleRepo org.UseColumnsRepo, goalieClient goalie.Goalie) ([]string, []string, error) {
+	roles, err := goalieClient.GetLoginUserRoles(c, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(roles.Roles) == 0 {
+		return nil, nil, nil
+	}
+	roleIDs := make([]string, 0)
+	for k := range roles.Roles {
+		roleIDs = append(roleIDs, roles.Roles[k].RoleID)
+	}
+	useColumns := columnRoleRepo.SelectAll(c, db, roleIDs...)
+	columnIDs := make([]string, 0)
+	useColumMap := make(map[string]string)
+	if len(useColumns) == 0 {
+		return nil, nil, nil
+	}
+	for k := range useColumns {
+		if v1, ok := useColumMap[useColumns[k].ColumnID]; !ok || v1 == "" {
+			useColumMap[useColumns[k].ColumnID] = useColumns[k].ColumnID
+			columnIDs = append(columnIDs, useColumns[k].ColumnID)
+		}
+	}
+	return columnIDs, roleIDs, nil
+}
+
+// GetUserInfo get user info
+func GetUserInfo(c context.Context, db *gorm.DB, userRepo org.UserRepo, userDepRepo org.UserDepartmentRelationRepo, userLeaderRepo org.UserLeaderRelationRepo,
+	depRepo org.DepartmentRepo, columnRepo org.UserTableColumnsRepo, columnRoleRepo org.UseColumnsRepo, goalieClient goalie.Goalie, id string, r *http.Request) (*SearchOneUserResponse, error) {
+	old := userRepo.Get(c, db, id)
 
 	if old != nil {
-		_, filter := u.columnRepo.GetFilter(c, u.DB, consts.FieldViewerStatus, consts.AllAttr)
+		columnIDs, _, err := GetRoles(c, db, r, columnRoleRepo, goalieClient)
+		if err != nil {
+			return nil, err
+		}
+		_, filter := columnRepo.GetFilter(c, db, id == r.Header.Get("User-Id"), columnIDs...)
+		resUser := SearchOneUserResponse{}
 		if filter != nil {
 			Filter(old, filter, OUT)
 		}
-		resUser := ViewerSearchOneUserResponse{}
+
 		resUser.ID = old.ID
 		resUser.Name = old.Name
 		resUser.Phone = old.Phone
@@ -789,37 +777,41 @@ func (u *user) UserSelectByID(c context.Context, r *ViewerSearchOneUserRequest) 
 		resUser.Avatar = old.Avatar
 		resUser.JobNumber = old.JobNumber
 		resUser.Gender = old.Gender
+
 		if old.PasswordStatus&consts.NormalStatus == 0 {
 			resUser.Status = (resUser.Status >> 1) << 1
 		} else {
 			resUser.Status = ((resUser.Status >> 1) << 1) + 1
 		}
-		list, _ := u.depRepo.PageList(c, u.DB, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
+
+		//从当前部门一直找到顶层部门组装
+		list, _ := depRepo.PageList(c, db, consts.NormalStatus, 1, 10000, []int{department.ComType, department.DepType})
 		depMap := make(map[string]*org.Department)
 		for k := range list {
 			depMap[list[k].ID] = &list[k]
 		}
-		departmentRelations := u.userDepRepo.SelectByUserIDs(u.DB, old.ID)
+		departmentRelations := userDepRepo.SelectByUserIDs(db, old.ID)
 		depIDs := make([]string, 0)
 		for k := range departmentRelations {
 			depIDs = append(depIDs, departmentRelations[k].DepID)
 		}
-		departments := u.depRepo.List(c, u.DB, []int{department.ComType, department.DepType}, depIDs...)
+
+		departments := depRepo.List(c, db, []int{department.ComType, department.DepType}, depIDs...)
 		if len(departments) > 0 {
 			for k := range departments {
 				responses := make([]DepOneResponse, 0)
-				resUser.Dep = append(resUser.Dep, FindDepToTop(depMap, departments[k].ID, responses))
+				resUser.DEP = append(resUser.DEP, FindDepToTop(depMap, departments[k].ID, responses))
 			}
 
 		}
-		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		leader, err := makeLeaderToTop(c, db, userLeaderRepo, userRepo, old.ID, old.ID)
 		if err == nil && leader != nil {
 			resUser.Leader = append(resUser.Leader, leader...)
 		}
+
 		return &resUser, nil
 	}
-	return nil, error2.New(code.DataNotExist)
-
+	return nil, nil
 }
 
 // SearchUserByIDsRequest get by ids
@@ -850,11 +842,16 @@ type SearchUserByIDsResponse struct {
 }
 
 // UserSelectByIDs user get by ids
-func (u *user) UserSelectByIDs(c context.Context, r *SearchUserByIDsRequest) ([]SearchUserByIDsResponse, error) {
-	list := u.userRepo.List(c, u.DB, r.IDs...)
+func (u *user) UserSelectByIDs(c context.Context, req *SearchUserByIDsRequest, r *http.Request) ([]SearchUserByIDsResponse, error) {
+	list := u.userRepo.List(c, u.DB, req.IDs...)
 	res := make([]SearchUserByIDsResponse, 0)
 	if len(list) > 0 {
-		_, filter := u.columnRepo.GetFilter(c, u.DB, consts.FieldViewerStatus, consts.AllAttr)
+		columnIDs, _, err := GetRoles(c, u.DB, r, u.columnRoleRepo, u.goalieClient)
+		if err != nil {
+			return nil, err
+		}
+
+		_, filter := u.columnRepo.GetFilter(c, u.DB, false, columnIDs...)
 		if filter != nil {
 			Filter(&list, filter, OUT)
 		}
@@ -1192,7 +1189,7 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 			}
 
 		}
-		leader, err := makeLeaderToTop(c, u, old.ID, old.ID)
+		leader, err := makeLeaderToTop(c, u.DB, u.userLeaderRepo, u.userRepo, old.ID, old.ID)
 		if err == nil && leader != nil {
 			userUser.Leader = append(userUser.Leader, leader...)
 		}
@@ -1207,8 +1204,8 @@ func (u *user) OthGetOneUser(c context.Context, rq *TokenUserRequest) (*TokenUse
 	return nil, error2.New(code.DataNotExist)
 }
 
-func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([][]Leader, error) {
-	relations := u.userLeaderRepo.SelectByUserIDs(u.DB, userID)
+func makeLeaderToTop(c context.Context, db *gorm.DB, userLeaderRepo org.UserLeaderRelationRepo, userRepo org.UserRepo, userID, startUserID string) ([][]Leader, error) {
+	relations := userLeaderRepo.SelectByUserIDs(db, userID)
 	if len(relations) > 0 {
 		res := make([][]Leader, 0)
 		for k := range relations {
@@ -1217,14 +1214,14 @@ func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([]
 			}
 			if relations[k].LeaderID != "" {
 				ls := make([]Leader, 0)
-				get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
+				get := userRepo.Get(c, db, relations[k].LeaderID)
 				if get != nil {
 					leader := Leader{}
 					leader.ID = get.ID
 					leader.Name = get.Name
 					leader.Email = get.Email
 					ls = append(ls, leader)
-					array, err := makeLeaderToTop(c, u, get.ID, startUserID)
+					array, err := makeLeaderToTop(c, db, userLeaderRepo, userRepo, get.ID, startUserID)
 					if err != nil {
 						return nil, err
 					}
@@ -1508,7 +1505,7 @@ type GetUsersByIDsRequest struct {
 
 // GetUsersByIDsResponse response
 type GetUsersByIDsResponse struct {
-	Users []ViewerSearchOneUserResponse `json:"users"`
+	Users []SearchOneUserResponse `json:"users"`
 }
 
 // GetUsersByIDs get users by user's ids
@@ -1519,7 +1516,7 @@ func (u *user) GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUs
 	}
 	response := &GetUsersByIDsResponse{}
 	for k := range list {
-		userResponse := ViewerSearchOneUserResponse{}
+		userResponse := SearchOneUserResponse{}
 		userResponse.ID = list[k].ID
 		userResponse.Name = list[k].Name
 		userResponse.Phone = list[k].Phone
@@ -1555,7 +1552,7 @@ func (u *user) GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUs
 			oneResponse.UseStatus = depMap[ud[response.Users[k].ID][k1]].UseStatus
 			oneResponse.Grade = depMap[ud[response.Users[k].ID][k1]].Grade
 			depOneResponses = append(depOneResponses, oneResponse)
-			response.Users[k].Dep = append(response.Users[k].Dep, depOneResponses)
+			response.Users[k].DEP = append(response.Users[k].DEP, depOneResponses)
 		}
 	}
 	return response, nil

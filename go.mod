@@ -15,7 +15,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/olivere/elastic/v7 v7.0.30
 	github.com/quanxiang-cloud/cabin v0.0.6
-	github.com/quanxiang-cloud/search v0.0.0-20220324022408-21413b3d50fd
+	github.com/quanxiang-cloud/search v1.1.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tealeg/xlsx v1.0.5
 	go.uber.org/zap v1.19.1

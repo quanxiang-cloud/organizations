@@ -83,7 +83,7 @@ func (u *userTableColumnsRepo) GetAll(ctx context.Context, db *gorm.DB, status i
 	return nil, 0
 }
 
-func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, status, attr int) ([]org.UserTableColumns, map[string]string) {
+func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, self bool, id ...string) ([]org.UserTableColumns, map[string]string) {
 	filter := make(map[string]string)
 	useColumns := make([]org.UserTableColumns, 0)
 	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
@@ -92,15 +92,13 @@ func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, statu
 	} else {
 		db = db.Where("tenant_id=?", tenantID)
 	}
-	if attr != 0 {
-		db = db.Where("attr = ?", attr)
-	}
-	if status == 0 {
-		db = db.Where("id in (select column_id from org_use_columns)")
-	} else {
-		db = db.Where("id in (select column_id from org_use_columns where viewer_status=?)", status)
-	}
 
+	db = db.Where("status = ?", consts.NormalStatus)
+	if !self {
+		if len(id) > 0 {
+			db = db.Where("id in (?)", id)
+		}
+	}
 	affected := db.Find(&useColumns).RowsAffected
 	if affected > 0 {
 		for _, v := range useColumns {
