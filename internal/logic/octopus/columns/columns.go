@@ -37,13 +37,13 @@ import (
 
 // Columns columns interface
 type Columns interface {
-	GetAll(ctx context.Context, req *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error)
-	GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest, r *http.Request, w http.ResponseWriter) (*GetColumnsByRoleResponse, error)
-	Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error)
-	Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error)
+	GetAll(ctx context.Context, req *GetAllColumnsRequest) (*GetAllColumnsResponse, error)
+	GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest) (*GetColumnsByRoleResponse, error)
+	Update(ctx context.Context, req *UpdateColumnRequest) (*UpdateColumnResponse, error)
+	Set(ctx context.Context, req *SetUseColumnsRequest) (*SetUseColumnsResponse, error)
 	Add(ctx context.Context, r *AddColumnRequest) (*AddColumnResponse, error)
-	Drop(ctx context.Context, req *DropColumnRequest, r *http.Request) (*DropColumnResponse, error)
-	Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error)
+	Drop(ctx context.Context, req *DropColumnRequest) (*DropColumnResponse, error)
+	Open(ctx context.Context, req *OpenColumnRequest) (*OpenColumnResponse, error)
 }
 
 const (
@@ -91,7 +91,7 @@ type UpdateColumnResponse struct {
 }
 
 // Update update columns alias name
-func (c *columns) Update(ctx context.Context, req *UpdateColumnRequest, r *http.Request, w http.ResponseWriter) (*UpdateColumnResponse, error) {
+func (c *columns) Update(ctx context.Context, req *UpdateColumnRequest) (*UpdateColumnResponse, error) {
 	getByName := c.tableColumnsRepo.GetByName(ctx, c.DB, req.Name)
 	if getByName != nil && getByName.ID != req.ID {
 		return nil, error2.New(code.ErrColumnExist)
@@ -179,16 +179,15 @@ func (c *columns) Add(ctx context.Context, r *AddColumnRequest) (*AddColumnRespo
 
 // DropColumnRequest del column
 type DropColumnRequest struct {
-	ID string `json:"id"`
+	ID string `json:"id" form:"id"`
 }
 
 // DropColumnResponse del column
 type DropColumnResponse struct {
-	ID string `json:"id"`
 }
 
 // Drop del column
-func (c *columns) Drop(ctx context.Context, req *DropColumnRequest, r *http.Request) (*DropColumnResponse, error) {
+func (c *columns) Drop(ctx context.Context, req *DropColumnRequest) (*DropColumnResponse, error) {
 	res := c.tableColumnsRepo.SelectByID(ctx, c.DB, req.ID)
 	dropResp := &DropColumnResponse{}
 	if res == nil {
@@ -205,6 +204,7 @@ func (c *columns) Drop(ctx context.Context, req *DropColumnRequest, r *http.Requ
 	}
 	tableColumns := &oct.UserTableColumns{}
 	tableColumns.ID = req.ID
+	tableColumns.ColumnsName = res.ColumnsName + "_del_" + id.ShortID(0)
 	tableColumns.DeletedAt = time.NowUnix()
 	tableColumns.Status = consts.DelStatus
 	err = c.tableColumnsRepo.Update(ctx, tx, tableColumns)
@@ -239,16 +239,15 @@ type ColumnResponse struct {
 	//1:use,-1:no use
 	Status int `json:"status"`
 	//1:sys,2:alias
-	Attr         int    `json:"attr"`
-	ViewerStatus int    `json:"viewerStatus"` //home 1 can see ,-1 can not set
-	Format       string `json:"format"`
-	Flag         int    `json:"flag,omitempty"`
+	Attr   int    `json:"attr"`
+	Format string `json:"format"`
+	Flag   int    `json:"flag,omitempty"`
 }
 
 // GetAll get all column
-func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest, r *http.Request, w http.ResponseWriter) (*GetAllColumnsResponse, error) {
+func (c *columns) GetAll(ctx context.Context, data *GetAllColumnsRequest) (*GetAllColumnsResponse, error) {
 	all := &GetAllColumnsResponse{}
-	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, data.Status, data.Name)
+	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, consts.NormalStatus, data.Name)
 	for k := range tableColumns {
 		if tableColumns[k].ColumnsName == consts.TENANTID {
 			continue
@@ -282,7 +281,7 @@ type SetUseColumnsResponse struct {
 }
 
 // Set set use column
-func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest, r *http.Request, w http.ResponseWriter) (*SetUseColumnsResponse, error) {
+func (c *columns) Set(ctx context.Context, req *SetUseColumnsRequest) (*SetUseColumnsResponse, error) {
 	all, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
 	allColumnMap := make(map[string]*oct.UserTableColumns)
 	for k := range all {
@@ -362,7 +361,7 @@ type OpenColumnResponse struct {
 }
 
 // Open open colum field
-func (c *columns) Open(ctx context.Context, req *OpenColumnRequest, r *http.Request) (*OpenColumnResponse, error) {
+func (c *columns) Open(ctx context.Context, req *OpenColumnRequest) (*OpenColumnResponse, error) {
 	_, total := c.tableColumnsRepo.GetAll(ctx, c.DB, 0, "")
 	if total > 0 {
 		return nil, error2.New(code.ErrFieldColumnUsed)
@@ -437,7 +436,7 @@ const (
 )
 
 // GetByRoleID get all column by role
-func (c *columns) GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest, r *http.Request, w http.ResponseWriter) (*GetColumnsByRoleResponse, error) {
+func (c *columns) GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest) (*GetColumnsByRoleResponse, error) {
 	all := &GetColumnsByRoleResponse{}
 	tableColumns, _ := c.tableColumnsRepo.GetAll(ctx, c.DB, consts.NormalStatus, "")
 	useColumns := c.useColumnsRepo.SelectAll(ctx, c.DB, req.RoleID)
@@ -456,7 +455,7 @@ func (c *columns) GetByRoleID(ctx context.Context, req *GetColumnsByRoleRequest,
 		response.Len = tableColumns[k].Len
 		response.PointLen = tableColumns[k].PointLen
 		response.Types = tableColumns[k].Types
-		response.Status = unUseStatus
+		response.Status = tableColumns[k].Status
 		response.Attr = tableColumns[k].Attr
 		response.Format = tableColumns[k].Format
 		response.Flag = UnSelected
