@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	host = "http://golie"
+	host = "http://goalie"
 	//host = "http://127.0.0.1:8081"
 
 	getLoginUserRolesURI = "/api/v1/goalie/role/now/list"
