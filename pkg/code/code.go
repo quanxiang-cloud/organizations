@@ -145,5 +145,5 @@ var CodeTable = error2.Table{
 	ErrFieldColumnUsed:      "扩展字段功能已被开启，请不要重复操作！",
 	ErrCircleData:           "数据关系成环，请检查后提交！",
 	ErrColumnExist:          "字段命名重复，请修改后再尝试！",
-	ErrNoPower:              "没有权限",
+	ErrNoPower:              "系统字段完成操作，扩展字段没有权限",
 }

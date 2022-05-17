@@ -184,25 +184,6 @@ func (u *UserAPI) UpdateUsersStatus(c *gin.Context) {
 	return
 }
 
-// GetTemplateFile get file template
-func (u *UserAPI) GetTemplateFile(c *gin.Context) {
-	r := new(user.GetTemplateFileRequest)
-	err := c.ShouldBind(&r)
-	if err != nil {
-		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
-		return
-	}
-
-	res, err := u.user.Template(ginheader.MutateContext(c), r)
-	if err != nil {
-		resp.Format(nil, err).Context(c)
-		return
-	}
-	resp.Format(res, nil).Context(c)
-	return
-
-}
-
 // AdminUserInfo admin get user info
 func (u *UserAPI) AdminUserInfo(c *gin.Context) {
 	r := new(user.SearchOneUserRequest)
@@ -211,7 +192,7 @@ func (u *UserAPI) AdminUserInfo(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	res, err := u.user.AdminSelectByID(ginheader.MutateContext(c), r, c.Request)
+	res, err := u.user.AdminSelectByID(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -221,7 +202,7 @@ func (u *UserAPI) UserUserInfo(c *gin.Context) {
 	profile := header2.GetProfile(c)
 	r := new(user.ViewerSearchOneUserRequest)
 	r.ID = profile.UserID
-	res, err := u.user.UserSelectByID(ginheader.MutateContext(c), r, c.Request)
+	res, err := u.user.UserSelectByID(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }
@@ -234,7 +215,7 @@ func (u *UserAPI) UserGetInfo(c *gin.Context) {
 		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
 		return
 	}
-	res, err := u.user.UserSelectByID(ginheader.MutateContext(c), r, c.Request)
+	res, err := u.user.UserSelectByID(ginheader.MutateContext(c), r)
 	resp.Format(res, err).Context(c)
 	return
 }

@@ -82,7 +82,6 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		manageUser.POST("/add", userAPI.Add)
 		manageUser.PUT("/update", userAPI.Update)
 		manageUser.POST("/list", userAPI.PageList)
-		manageUser.GET("/template", userAPI.GetTemplateFile)
 		manageUser.GET("/info", userAPI.AdminUserInfo)
 		manageUser.PUT("/change/dep", userAPI.AdminChangeUsersDEP)
 		manageUser.GET("/index/count", userAPI.IndexCount)
@@ -143,16 +142,6 @@ func NewRouter(ctx context.Context, c configs.Config, log logger.AdaptedLogger, 
 		viewerDep.GET("/info", depAPI.SelectDepByIDUser)
 		viewerDep.GET("/pid", depAPI.SelectDepByPIDUser)
 		viewerDep.POST("/ids", depAPI.GetDepsByIDs)
-	}
-
-	columnAPI := NewColumnsAPI(c, db, redisClient, log)
-	manageColumn := manage.Group("/column")
-	{
-		manageColumn.POST("/open", columnAPI.Open)
-		manageColumn.GET("/all", columnAPI.GetAll)
-		manageColumn.GET("/all/role", columnAPI.GetByRoleID)
-		manageColumn.PUT("/set", columnAPI.Set)
-		manageColumn.PUT("/update/name", columnAPI.Update)
 	}
 
 	oth := v1.Group("/o")

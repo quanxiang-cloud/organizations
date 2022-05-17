@@ -108,7 +108,7 @@ func (u *othersServer) addUser(c context.Context, reqData []map[string]interface
 		if err != nil {
 			return nil, err
 		}
-		_, aliasFilter := u.columnRepo.GetFilter(c, u.DB, false, columnIDs...)
+		_, aliasFilter := u.columnRepo.GetFilter(c, u.DB, consts.AliasAttr, false, columnIDs...)
 		if aliasFilter != nil {
 			for k := range reqData {
 				if result.Result[k].ID != "" {

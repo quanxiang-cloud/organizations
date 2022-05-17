@@ -52,13 +52,12 @@ type User interface {
 	Update(c context.Context, r *UpdateUserRequest) (*UpdateUserResponse, error)
 	UpdateAvatar(c context.Context, r *UpdateUserAvatarRequest) (*UpdateUserAvatarResponse, error)
 	PageList(c context.Context, r *SearchListUserRequest) (*page.Page, error)
-	AdminSelectByID(c context.Context, req *SearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error)
-	UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error)
+	AdminSelectByID(c context.Context, req *SearchOneUserRequest) (*SearchOneUserResponse, error)
+	UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest) (*SearchOneUserResponse, error)
 	UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusResponse, error)
 	UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*ListStatusResponse, error)
 	AdminChangeUsersDEP(c context.Context, r *ChangeUsersDEPRequest) (*ChangeUsersDEPResponse, error)
 	OthGetOneUser(c context.Context, r *TokenUserRequest) (*TokenUserResponse, error)
-	Template(c context.Context, r *GetTemplateFileRequest) (*GetTemplateFileResponse, error)
 	IndexCount(c context.Context, r *IndexCountRequest) (*IndexCountResponse, error)
 	Register(c context.Context, r *RegisterRequest) (*RegisterResponse, error)
 	GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUsersByIDsResponse, error)
@@ -76,8 +75,6 @@ type user struct {
 	message        message.Message
 	ldap           ldap.Ldap
 	conf           configs.Config
-	columnRepo     org.UserTableColumnsRepo
-	columnRoleRepo org.UseColumnsRepo
 	userTenantRepo org.UserTenantRelationRepo
 	landlord       landlord.Landlord
 	goalieClient   goalie.Goalie
@@ -99,8 +96,6 @@ func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient
 		ldap:    ldap.NewLdap(conf.InternalNet),
 
 		conf:           conf,
-		columnRepo:     mysql2.NewUserTableColumnsRepo(),
-		columnRoleRepo: mysql2.NewUseColumnsRepo(),
 		userTenantRepo: mysql2.NewUserTenantRelationRepo(),
 		landlord:       landlord.NewLandlord(conf.InternalNet),
 		goalieClient:   goalie.NewGoalie(conf.InternalNet),
@@ -700,9 +695,8 @@ type SearchOneUserResponse struct {
 }
 
 // AdminSelectByID 管理员根据ID查询人员
-func (u *user) AdminSelectByID(c context.Context, req *SearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error) {
-	info, err := GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, u.columnRepo, u.columnRoleRepo,
-		u.goalieClient, req.ID, r)
+func (u *user) AdminSelectByID(c context.Context, req *SearchOneUserRequest) (*SearchOneUserResponse, error) {
+	info, err := GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, req.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -718,55 +712,17 @@ type ViewerSearchOneUserRequest struct {
 }
 
 // UserSelectByID user get by id
-func (u *user) UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest, r *http.Request) (*SearchOneUserResponse, error) {
-	return GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, u.columnRepo, u.columnRoleRepo,
-		u.goalieClient, req.ID, r)
-}
-
-// GetRoles get roles
-func GetRoles(c context.Context, db *gorm.DB, r *http.Request, columnRoleRepo org.UseColumnsRepo, goalieClient goalie.Goalie) ([]string, []string, error) {
-	roles, err := goalieClient.GetLoginUserRoles(c, r)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(roles.Roles) == 0 {
-		return nil, nil, nil
-	}
-	roleIDs := make([]string, 0)
-	for k := range roles.Roles {
-		roleIDs = append(roleIDs, roles.Roles[k].RoleID)
-	}
-	useColumns := columnRoleRepo.SelectAll(c, db, roleIDs...)
-	columnIDs := make([]string, 0)
-	useColumMap := make(map[string]string)
-	if len(useColumns) == 0 {
-		return nil, nil, nil
-	}
-	for k := range useColumns {
-		if v1, ok := useColumMap[useColumns[k].ColumnID]; !ok || v1 == "" {
-			useColumMap[useColumns[k].ColumnID] = useColumns[k].ColumnID
-			columnIDs = append(columnIDs, useColumns[k].ColumnID)
-		}
-	}
-	return columnIDs, roleIDs, nil
+func (u *user) UserSelectByID(c context.Context, req *ViewerSearchOneUserRequest) (*SearchOneUserResponse, error) {
+	return GetUserInfo(c, u.DB, u.userRepo, u.userDepRepo, u.userLeaderRepo, u.depRepo, req.ID)
 }
 
 // GetUserInfo get user info
 func GetUserInfo(c context.Context, db *gorm.DB, userRepo org.UserRepo, userDepRepo org.UserDepartmentRelationRepo, userLeaderRepo org.UserLeaderRelationRepo,
-	depRepo org.DepartmentRepo, columnRepo org.UserTableColumnsRepo, columnRoleRepo org.UseColumnsRepo, goalieClient goalie.Goalie, id string, r *http.Request) (*SearchOneUserResponse, error) {
+	depRepo org.DepartmentRepo, id string) (*SearchOneUserResponse, error) {
 	old := userRepo.Get(c, db, id)
 
 	if old != nil {
-		columnIDs, _, err := GetRoles(c, db, r, columnRoleRepo, goalieClient)
-		if err != nil {
-			return nil, err
-		}
-		_, filter := columnRepo.GetFilter(c, db, id == r.Header.Get("User-Id"), columnIDs...)
 		resUser := SearchOneUserResponse{}
-		if filter != nil {
-			Filter(old, filter, OUT)
-		}
-
 		resUser.ID = old.ID
 		resUser.Name = old.Name
 		resUser.Phone = old.Phone
@@ -846,15 +802,6 @@ func (u *user) UserSelectByIDs(c context.Context, req *SearchUserByIDsRequest, r
 	list := u.userRepo.List(c, u.DB, req.IDs...)
 	res := make([]SearchUserByIDsResponse, 0)
 	if len(list) > 0 {
-		columnIDs, _, err := GetRoles(c, u.DB, r, u.columnRoleRepo, u.goalieClient)
-		if err != nil {
-			return nil, err
-		}
-
-		_, filter := u.columnRepo.GetFilter(c, u.DB, false, columnIDs...)
-		if filter != nil {
-			Filter(&list, filter, OUT)
-		}
 		for k := range list {
 			userResponse := SearchUserByIDsResponse{}
 			userResponse.ID = list[k].ID
@@ -1297,17 +1244,6 @@ type GetTemplateFileResponse struct {
 	Data        []byte            `json:"data"`
 	FileName    string            `json:"fileName"`
 	ExcelColumn map[string]string `json:"excelColumn"`
-}
-
-// Template get xlsx template
-func (u *user) Template(c context.Context, r *GetTemplateFileRequest) (*GetTemplateFileResponse, error) {
-	xlsxFields := u.columnRepo.GetXlsxField(c, u.DB, consts.FieldAdminStatus)
-	if xlsxFields == nil || len(xlsxFields) == 0 {
-		return nil, error2.New(code.FieldNameIsNull)
-	}
-	res := &GetTemplateFileResponse{}
-	res.ExcelColumn = xlsxFields
-	return res, nil
 }
 
 // IndexCountRequest count

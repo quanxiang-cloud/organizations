@@ -15,7 +15,6 @@ limitations under the License.
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/quanxiang-cloud/organizations/internal/logic/octopus/core"
 	"gorm.io/gorm"
 
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -43,7 +42,7 @@ func (co *Columns) Open(c *gin.Context) {
 		return
 	}
 	res, err := co.columns.Open(ginheader.MutateContext(c), r, c.Request)
-	core.DealResponse(c.Writer, res.Response)
+	resp.Format(res, err).Context(c)
 	return
 }
 

@@ -59,7 +59,6 @@ type othersServer struct {
 	accountReo  org.AccountRepo
 	//message     message.Message
 	redisClient    redis.UniversalClient
-	columnRepo     org.UserTableColumnsRepo
 	ldap           ldap.Ldap
 	conf           configs.Config
 	userLeaderRepo org.UserLeaderRelationRepo
@@ -77,7 +76,6 @@ func NewOtherServer(conf configs.Config, db *gorm.DB, redisClient redis.Universa
 		DB:          db,
 		//message:     message.NewMessage(configs.Config.InternalNet),
 		redisClient:    redisClient,
-		columnRepo:     mysql2.NewUserTableColumnsRepo(),
 		ldap:           ldap.NewLdap(conf.InternalNet),
 		conf:           conf,
 		userLeaderRepo: mysql2.NewUserLeaderRelationRepo(),
