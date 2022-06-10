@@ -273,21 +273,21 @@ func (u *account) CheckPassword(c context.Context, r *LoginAccountRequest) (*Log
 	switch r.Types {
 	case loginTypePwd:
 		flag, err = u.pwd(c, r, acc.Password)
-		if !flag || err != nil {
-			err = error2.New(code.AccountPasswordCountErr, int(info.PwdCount)-(errNum+1))
-		}
 	case loginTypeLdap:
 		c = context.WithValue(c, user.TenantID, oldUser.TenantID)
 		flag, err = u.ldap(c, r.Header, r)
 	case loginTypeCode:
 		flag, err = u.code(c, r)
 	}
-	if !flag || err != nil {
+	if err != nil {
+		return nil, err
+	}
+	if !flag {
+		err = error2.New(code.AccountPasswordCountErr, int(info.PwdCount)-(errNum+1))
 		u.redisClient.SetEX(c, redisAccountPWDErr+acc.UserID, errNum+1, time.Duration(info.PwdCountWait)*time.Minute)
-		return res, err
+		return nil, err
 	}
 	u.redisClient.Del(c, redisAccountPWDErr+acc.UserID)
-
 	return res, nil
 
 }
@@ -297,7 +297,7 @@ func (u *account) pwd(ctx context.Context, r *LoginAccountRequest, comparePasswo
 	if encode2.MD5Encode(r.Password) == comparePassword {
 		return true, nil
 	}
-	return false, error2.New(code.AccountPasswordCountErr)
+	return false, nil
 }
 
 // ldap ldap
