@@ -263,9 +263,11 @@ func (u *account) CheckPassword(c context.Context, r *LoginAccountRequest) (*Log
 	}
 
 	if u.conf.Ldap.Open {
-		split := strings.Split(r.UserName, "@")
-		if split[1] == u.conf.Ldap.Regex {
-			r.Types = loginTypeLdap
+		if r.Types == loginTypePwd {
+			split := strings.Split(r.UserName, "@")
+			if split[1] == u.conf.Ldap.Regex {
+				r.Types = loginTypeLdap
+			}
 		}
 	}
 	var flag = false
