@@ -1163,6 +1163,9 @@ func makeLeaderToTop(c context.Context, u *user, userID, startUserID string) ([]
 			if relations[k].LeaderID != "" {
 				ls := make([]Leader, 0)
 				get := u.userRepo.Get(c, u.DB, relations[k].LeaderID)
+				if get == nil {
+					return res, nil
+				}
 				leader := Leader{}
 				leader.ID = get.ID
 				leader.Name = get.Name

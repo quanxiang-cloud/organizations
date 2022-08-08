@@ -346,7 +346,12 @@ A:
 		var userID = ""
 		result[k] = &Result{}
 		if oldAccount == nil {
-			userID = id2.HexUUID(true)
+			if reqData[k].ID == "" {
+				userID = id2.HexUUID(true)
+			} else {
+				userID = reqData[k].ID
+			}
+
 			reqData[k].ID = userID
 			u2.ID = userID
 			u2.CreatedBy = profile.UserID
@@ -549,7 +554,12 @@ func (u *othersServer) insertOrUpdateDep(c context.Context, oldDeps []org.Depart
 				}
 			} else {
 				d := &org.Department{}
-				d.ID = id2.ShortID(0)
+				if reqData[k].ID == "" {
+					d.ID = id2.ShortID(0)
+				} else {
+					d.ID = reqData[k].ID
+				}
+
 				d.PID = reqData[k].PID
 				d.SuperPID = supperID
 				d.Name = reqData[k].Name
@@ -575,7 +585,11 @@ func (u *othersServer) insertOrUpdateDep(c context.Context, oldDeps []org.Depart
 	}
 	for k := range reqData {
 		d := &org.Department{}
-		d.ID = id2.ShortID(0)
+		if reqData[k].ID == "" {
+			d.ID = id2.ShortID(0)
+		} else {
+			d.ID = reqData[k].ID
+		}
 		d.PID = reqData[k].PID
 		d.SuperPID = supperID
 		d.Name = reqData[k].Name
