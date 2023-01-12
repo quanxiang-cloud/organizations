@@ -32,7 +32,7 @@ type User struct {
 	TenantID  string `gorm:"column:tenant_id;type:varchar(64); " json:"tenantID,omitempty" comment:"租户ID"`
 	Position  string `gorm:"column:position;type:varchar(64); " json:"position,omitempty" comment:"职位"`
 	Avatar    string `gorm:"column:avatar;type:text; " json:"avatar,omitempty" comment:"头像"`
-	JobNumber string `gorm:"column:job_number;type:text; " json:"job_number,omitempty" comment:"工号"`
+	JobNumber string `gorm:"column:job_number;type:text; " json:"jobNumber,omitempty" comment:"工号"`
 	//0:null,1:man,2:woman
 	Gender int    `gorm:"column:gender;type:int(4); " json:"gender,omitempty" comment:"性别"`
 	Source string `gorm:"column:source;type:varchar(64); " json:"source,omitempty" comment:"信息来源"`

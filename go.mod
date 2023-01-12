@@ -24,3 +24,6 @@ require (
 )
 
 replace github.com/elliotchance/redismock/v8 v8.11.0 => github.com/vvlgo/redismock/v8 v8.11.2
+replace (
+	github.com/quanxiang-cloud/cabin v0.0.6 => ../cabin
+)

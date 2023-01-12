@@ -41,9 +41,33 @@ const (
 	FieldAdminStatus = 0
 
 	FieldViewerStatus = 1
+
+	OwnerDepName = "所在部门名称"
+
+	NamePhoneEmailNotNull = "姓名、私人邮箱、公司邮箱不能为空！"
+
+	NameLengthIsLong = "姓名长度超过限制"
+
+	NotPhone = "手机格式不正确"
+
+	NotDepartment = "部门错误或者不存在"
+
+	EmailLengthIsLong = "邮箱超过长度"
+
+	NotEmail = "邮箱格式不正确"
+
+	EmailPhoneRepeat = "邮箱或者手机重复"
+
+	EmailPhoneExist = "邮箱或者手机号已存在"
+
+	EmailExist = "帐户邮箱已被占用"
+
+	PhoneExist = "手机帐户已被占用"
+
+	RelationDepartmentFail = "关联部门失败"
 )
 
-//SYSTEM column
+// SYSTEM column
 const (
 	ID = "id"
 

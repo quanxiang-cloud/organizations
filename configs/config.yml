@@ -55,6 +55,8 @@ messageTemplate:
   forgetCode: org_forgetcode
   registerCode: org_registercode
   resetPWD: org_resetpwd
+  newPWD: org_new_code
+
 # -------------------- elastic --------------------
 elastic:
   host:

@@ -13,12 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
-	"gorm.io/gorm"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
 	ginlogger "github.com/quanxiang-cloud/cabin/tailormade/gin"
@@ -29,6 +25,9 @@ import (
 	"github.com/quanxiang-cloud/organizations/pkg/code"
 	"github.com/quanxiang-cloud/organizations/pkg/configs"
 	"github.com/quanxiang-cloud/organizations/pkg/header2"
+	"gorm.io/gorm"
+	"io"
+	"strings"
 )
 
 // UserAPI api
@@ -123,7 +122,7 @@ func (u *UserAPI) UpdateAvatar(c *gin.Context) {
 	return
 }
 
-//PageList page select
+// PageList page select
 func (u *UserAPI) PageList(c *gin.Context) {
 	r := new(user.SearchListUserRequest)
 	err := c.ShouldBind(r)
@@ -137,7 +136,7 @@ func (u *UserAPI) PageList(c *gin.Context) {
 	return
 }
 
-//UpdateStatus update one user use status
+// UpdateStatus update one user use status
 func (u *UserAPI) UpdateStatus(c *gin.Context) {
 	r := new(user.StatusRequest)
 	err := c.ShouldBind(r)
@@ -153,7 +152,7 @@ func (u *UserAPI) UpdateStatus(c *gin.Context) {
 	return
 }
 
-//UpdateUsersStatus update list user status
+// UpdateUsersStatus update list user status
 func (u *UserAPI) UpdateUsersStatus(c *gin.Context) {
 	r := new(user.ListStatusRequest)
 	err := c.ShouldBind(r)
@@ -188,6 +187,45 @@ func (u *UserAPI) GetTemplateFile(c *gin.Context) {
 	resp.Format(res, nil).Context(c)
 	return
 
+}
+
+// ImportFile 上传文件
+func (u *UserAPI) ImportFile(c *gin.Context) {
+
+	profile := header2.GetProfile(c)
+	file, _ := c.FormFile("file")
+	filename := file.Filename
+	index := filename[strings.LastIndex(filename, "."):]
+	r := new(user.ImportFileRequest)
+	err := c.ShouldBind(r)
+	if err != nil {
+		resp.Format(nil, error2.New(code.InvalidParams)).Context(c)
+		return
+	}
+	r.TenantID = profile.TenantID
+	if strings.Contains(index, "xlsx") {
+		open, _ := file.Open()
+		defer open.Close()
+		all, err := io.ReadAll(open)
+		if err != nil {
+			//todo 需要记录操作急打印日志
+			resp.Format(nil, err).Context(c)
+			return
+		}
+		importFile, err := u.user.ImportFile(ginheader.MutateContext(c), all, profile, r)
+		if err != nil {
+			//todo 需要记录操作急打印日志
+			resp.Format(nil, err).Context(c)
+			return
+		}
+		//todo 需要记录操作急打印日志
+		u.search.PushUser(ginheader.MutateContext(c), nil, importFile.Users...)
+		resp.Format(importFile, nil).Context(c)
+		return
+	}
+	//todo 需要记录操作急打印日志
+	resp.Format(nil, error2.New(code.InvalidFile)).Context(c)
+	return
 }
 
 // AdminUserInfo admin get user info
@@ -315,7 +353,7 @@ func (u *UserAPI) IndexCount(c *gin.Context) {
 	return
 }
 
-//OtherUserAll 其它服务全部正常用户的信息
+// OtherUserAll 其它服务全部正常用户的信息
 func (u *UserAPI) OtherUserAll(c *gin.Context) {
 	r := new(other.UserAllRequest)
 	err := c.ShouldBind(r)

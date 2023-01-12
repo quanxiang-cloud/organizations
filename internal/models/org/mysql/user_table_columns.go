@@ -111,39 +111,17 @@ func (u *userTableColumnsRepo) GetFilter(ctx context.Context, db *gorm.DB, statu
 
 func (u *userTableColumnsRepo) GetXlsxField(ctx context.Context, db *gorm.DB, status int) map[string]string {
 	fields := make(map[string]string)
-	useColumns := make([]org.UserTableColumns, 0)
-	_, tenantID := ginheader.GetTenantID(ctx).Wreck()
-	if tenantID == "" {
-		db = db.Where("tenant_id=? or tenant_id is null", tenantID)
-	} else {
-		db = db.Where("tenant_id=?", tenantID)
-	}
-	if status != 0 {
-		db = db.Where("status = ?", status)
-	}
-	affected := db.Where("id in (select column_id from org_use_columns)").Find(&useColumns).RowsAffected
-
-	if affected > 0 {
-
-		for _, v := range useColumns {
-
-			if v.Name == "" {
-				return nil
-			}
-			fields[v.Name] = v.ColumnsName
-			switch v.ColumnsName {
-			case consts.AVATAR, consts.UPDATEDBY, consts.UPDATEDAT, consts.CREATEDBY, consts.CREATEDAT, consts.LEADERID, consts.USESTATUS, consts.PASSWORDSTATUS, consts.COMPANYID:
-				delete(fields, v.Name)
-
-			}
-
-		}
-		return fields
-	}
-	return nil
+	fields["姓名"] = consts.NAME
+	fields["手机号"] = consts.PHONE
+	fields["邮箱"] = consts.EMAIL
+	fields["邮箱"] = consts.EMAIL
+	fields["私人邮箱"] = consts.SELFEMAIL
+	fields["工号"] = consts.JOBNUMBER
+	fields["私人邮箱"] = consts.SELFEMAIL
+	return fields
 }
 
-//NewUserTableColumnsRepo new
+// NewUserTableColumnsRepo new
 func NewUserTableColumnsRepo() org.UserTableColumnsRepo {
 	return new(userTableColumnsRepo)
 }

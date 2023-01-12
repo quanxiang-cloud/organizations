@@ -1,5 +1,5 @@
 name=syncjob
-version=vtemp0.0.2
+version=vtemp0.0.4
 devHost=192.168.200.20
 devUser=ubuntu
 repository=lowcode

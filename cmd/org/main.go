@@ -15,6 +15,10 @@ limitations under the License.
 import (
 	"context"
 	"flag"
+	"fmt"
+	"github.com/go-logr/zapr"
+	"github.com/quanxiang-cloud/organizations/pkg/util"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,6 +41,14 @@ func main() {
 		panic(err)
 	}
 	ctx := context.Background()
+
+	zapLog, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
+	}
+	logger := zapr.NewLogger(zapLog)
+
+	ctx = util.SetCtx(ctx, util.ContextKey{}, logger)
 	router, err := org.NewRouter(ctx, *conf, log)
 	if err != nil {
 

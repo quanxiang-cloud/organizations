@@ -13,10 +13,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/quanxiang-cloud/organizations/internal/logic/org/department"
+	"github.com/quanxiang-cloud/organizations/pkg/goalie"
+	"github.com/tealeg/xlsx"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,10 +61,11 @@ type User interface {
 	UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*ListStatusResponse, error)
 	AdminChangeUsersDEP(c context.Context, r *ChangeUsersDEPRequest) (*ChangeUsersDEPResponse, error)
 	OthGetOneUser(c context.Context, r *TokenUserRequest) (*TokenUserResponse, error)
-	Template(c context.Context, r *GetTemplateFileRequest) (*GetTemplateFileResponse, error)
 	IndexCount(c context.Context, r *IndexCountRequest) (*IndexCountResponse, error)
 	Register(c context.Context, r *RegisterRequest) (*RegisterResponse, error)
 	GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUsersByIDsResponse, error)
+	ImportFile(c context.Context, file []byte, profile header2.Profile, r *ImportFileRequest) (*ImportFileResponse, error)
+	Template(c context.Context, r *GetTemplateFileRequest) (*GetTemplateFileResponse, error)
 }
 
 type user struct {
@@ -75,9 +82,10 @@ type user struct {
 	columnRepo     org.UserTableColumnsRepo
 	userTenantRepo org.UserTenantRelationRepo
 	landlord       landlord.Landlord
+	goalie         goalie.Goalie
 }
 
-//NewUser new
+// NewUser new
 func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient) User {
 
 	return &user{
@@ -96,6 +104,7 @@ func NewUser(conf configs.Config, db *gorm.DB, redisClient redis.UniversalClient
 		columnRepo:     mysql2.NewUserTableColumnsRepo(),
 		userTenantRepo: mysql2.NewUserTenantRelationRepo(),
 		landlord:       landlord.NewLandlord(conf.InternalNet),
+		goalie:         goalie.NewGoalie(conf.InternalNet),
 	}
 }
 
@@ -125,13 +134,13 @@ type AddUserRequest struct {
 	Password    string
 }
 
-//LeaderRequest leader struct
+// LeaderRequest leader struct
 type LeaderRequest struct {
 	UserID string `json:"userID"`
 	Attr   string `json:"attr"`
 }
 
-//DepRequest department struct
+// DepRequest department struct
 type DepRequest struct {
 	DepID string `json:"depID"`
 	Attr  string `json:"attr"`
@@ -444,7 +453,8 @@ func (u *user) Update(c context.Context, r *UpdateUserRequest) (*UpdateUserRespo
 	}
 	tx.Commit()
 	response := &UpdateUserResponse{ID: r.ID}
-	response.UpdateUser = updateData
+	newOld := u.userRepo.Get(c, u.DB, r.ID)
+	response.UpdateUser = newOld
 
 	if len(r.Leader) > 0 {
 		users := findChild(c, u, r.ID)
@@ -860,7 +870,7 @@ type StatusRequest struct {
 	Profile   header2.Profile
 }
 
-//StatusResponse response
+// StatusResponse response
 type StatusResponse struct {
 	User *org.User `json:"-"`
 }
@@ -914,11 +924,21 @@ func (u *user) UpdateUserStatus(c context.Context, r *StatusRequest) (*StatusRes
 		return nil, err
 	}
 	tx.Commit()
+	if r.UseStatus == consts.DelStatus {
+		delRequest := &goalie.OthDelRequest{
+			IDs:   []string{r.ID},
+			DelBy: r.UpdatedBy,
+		}
+		_, err := u.goalie.DelOwner(c, delRequest)
+		if err != nil {
+			logger.Logger.Error("del user role from goalie err", err)
+		}
+	}
 
 	return &StatusResponse{User: old}, nil
 }
 
-//ListStatusRequest update list user status request
+// ListStatusRequest update list user status request
 type ListStatusRequest struct {
 	IDS []string `json:"ids" binding:"required"`
 	//1:normal，-2:invalid，-1:del，2:active,-3:no word
@@ -926,12 +946,12 @@ type ListStatusRequest struct {
 	UpdatedBy string `json:"updatedBy"`
 }
 
-//ListStatusResponse update list user status response
+// ListStatusResponse update list user status response
 type ListStatusResponse struct {
 	Users []*org.User `json:"-"`
 }
 
-//UpdateUsersStatus update list user status
+// UpdateUsersStatus update list user status
 func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*ListStatusResponse, error) {
 	if r.UseStatus == consts.DelStatus {
 		return nil, error2.New(code.BatchDeleteNotSupported)
@@ -939,6 +959,7 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 	info := systems.GetSecurityInfo(c, u.conf, u.redisClient)
 	pwds := make(map[string]string)
 	users := make([]*org.User, 0)
+	ids := make([]string, 0)
 	for _, v := range r.IDS {
 		old := u.userRepo.Get(c, u.DB, v)
 		if old == nil {
@@ -982,7 +1003,18 @@ func (u *user) UpdateUsersStatus(c context.Context, r *ListStatusRequest) (*List
 		}
 		tx.Commit()
 		users = append(users, old)
+		ids = append(ids, v)
 
+	}
+	if r.UseStatus == consts.DelStatus {
+		delRequest := &goalie.OthDelRequest{
+			IDs:   ids,
+			DelBy: r.UpdatedBy,
+		}
+		_, err := u.goalie.DelOwner(c, delRequest)
+		if err != nil {
+			logger.Logger.Error("del user role from goalie err", err)
+		}
 	}
 	response := &ListStatusResponse{}
 	if len(users) > 0 {
@@ -1200,9 +1232,6 @@ func CheckLeader(c context.Context, db *gorm.DB, ur org.UserLeaderRelationRepo, 
 	relations := ur.SelectByUserIDs(db, userID)
 	if len(relations) > 0 {
 		for k := range relations {
-			if relations[k].LeaderID == startUserID {
-				return errors.New("circle leader")
-			}
 			if relations[k].LeaderID != "" {
 				err := CheckLeader(c, db, ur, relations[k].LeaderID, startUserID)
 				if err != nil {
@@ -1254,8 +1283,37 @@ func (u *user) Template(c context.Context, r *GetTemplateFileRequest) (*GetTempl
 	if xlsxFields == nil || len(xlsxFields) == 0 {
 		return nil, error2.New(code.FieldNameIsNull)
 	}
+	newFile := xlsx.NewFile()
+	sheet, err := newFile.AddSheet("sheet1")
+	if err != nil {
+		return nil, err
+	}
+	row := sheet.AddRow()
+	s := make([]string, 0)
+	for k, v := range xlsxFields {
+		if v != consts.ID {
+			s = append(s, k)
+		}
+	}
+	s = append(s, consts.OwnerDepName)
+	sort.Strings(s)
+	for k := range s {
+		cell := row.AddCell()
+		cell.SetValue(s[k])
+	}
+	row2 := sheet.AddRow()
+	for k := range s {
+		addCell := row2.AddCell()
+		addCell.SetValue("demo(导入请删除此行)")
+		if s[k] == consts.OwnerDepName {
+			addCell.SetValue("/部门demo1/子部门demo2")
+		}
+	}
+	buffer := new(bytes.Buffer)
+	newFile.Write(buffer)
 	res := &GetTemplateFileResponse{}
-	res.ExcelColumn = xlsxFields
+	res.Data = buffer.Bytes()
+	res.FileName = u.conf.TemplateName
 	return res, nil
 }
 
@@ -1505,4 +1563,318 @@ func (u *user) GetUsersByIDs(c context.Context, r *GetUsersByIDsRequest) (*GetUs
 		}
 	}
 	return response, nil
+}
+
+// ImportFileRequest 上传文件
+type ImportFileRequest struct {
+	UseStatus int    `json:"useStatus" form:"useStatus" binding:"required,max=64"` //状态：1正常，-2禁用，-1删除，2激活==1 （与账号库相同）
+	IsUpdate  int    `json:"isUpdate" form:"isUpdate" `                            //1更新旧数据，-1不更新只插入新数据
+	TenantID  string `json:"tenantID"`
+}
+
+// ImportFileResponse 文件导入结果
+type ImportFileResponse struct {
+	AddSuccessTotal    int                      `json:"addSuccessTotal"`
+	AddData            []map[string]interface{} `json:"addData"`
+	UpdateSuccessTotal int                      `json:"updateSuccessTotal"`
+	UpdateData         []map[string]interface{} `json:"updateData"`
+	FailTotal          int                      `json:"failTotal"`
+	FailUsers          []map[string]interface{} `json:"failUsers"`
+	Users              []*org.User              `json:"-"`
+}
+
+// ImportFile 上传文件
+func (u *user) ImportFile(c context.Context, file []byte, profile header2.Profile, r *ImportFileRequest) (*ImportFileResponse, error) {
+	fail := make([]map[string]interface{}, 0)
+	//1、开始解析excel文件
+	suc1, err := u.makeDataFromExcl(c, file, r.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	//2、第二次遍历suc1中的数据，找出邮箱或者手机重复的，剩下的才能进行插入操作
+	suc2, fails := u.screenUserData(c, suc1, r)
+	fail = append(fail, fails...)
+	//3、开始执行插入操作
+	suc, fail2, updates, userList := u.insertList(c, suc2, profile.UserID, r)
+	fail = append(fail, fail2...)
+	updateSucs := make([]map[string]interface{}, 0)
+	//4、执行跟新操作
+	var updateTotal = 0
+	if r.IsUpdate == isUpdate {
+		updateSuc, fail3, users := u.updateList(c, updates, r.TenantID)
+		fail = append(fail, fail3...)
+		updateSucs = append(updateSucs, updateSuc...)
+		updateTotal = len(updateSuc)
+		userList = append(userList, users...)
+	}
+
+	result := ImportFileResponse{
+		AddSuccessTotal:    len(suc),
+		AddData:            suc,
+		UpdateSuccessTotal: updateTotal,
+		UpdateData:         updateSucs,
+		FailTotal:          len(fail),
+		FailUsers:          fail,
+		Users:              userList,
+	}
+
+	return &result, nil
+}
+
+// 1、从excl组装数据
+func (u *user) makeDataFromExcl(ctx context.Context, file []byte, tenantID string) ([]map[string]interface{}, error) {
+	xlFile, _ := xlsx.OpenBinary(file)
+	if xlFile == nil {
+		return nil, error2.New(code.InvalidFile)
+	}
+	suc1 := make([]map[string]interface{}, 0)
+	xlsxFields := u.columnRepo.GetXlsxField(ctx, u.DB, consts.FieldAdminStatus)
+	departments, _ := u.depRepo.PageList(ctx, u.DB, consts.NormalStatus, 1, 10000)
+	depMap := make(map[string]string)
+	for _, v := range departments {
+		depMap[v.Name] = v.ID
+	}
+	sheet := xlFile.Sheets[0]
+	for k, row := range sheet.Rows {
+		fmt.Println("k===", k)
+		cells0 := sheet.Rows[0].Cells
+		if k >= 1 {
+			s := make(map[string]interface{})
+			for k1, v1 := range row.Cells {
+				fmt.Println("k1===", k1)
+				if cells0[k1].Value == consts.OwnerDepName {
+					s[consts.DEPNAME] = v1.Value
+				} else {
+					s[xlsxFields[cells0[k1].Value]] = v1.Value
+				}
+			}
+			if len(s) > 0 {
+				suc1 = append(suc1, s)
+			}
+
+		}
+	}
+	return suc1, nil
+}
+
+// 2、对数据进行组装，判断出需新增和更新的数据
+func (u *user) screenUserData(ctx context.Context, suc1 []map[string]interface{}, r *ImportFileRequest) (suc, fails []map[string]interface{}) {
+	m := make(map[string]int)
+	fail := make([]map[string]interface{}, 0)
+	suc2 := make([]map[string]interface{}, 0)
+	suc3 := make([]map[string]interface{}, 0)
+	for k := range suc1 {
+		if suc1[k][consts.EMAIL].(string) == "" || suc1[k][consts.SELFEMAIL].(string) == "" {
+			suc1[k][consts.REMARK] = consts.NamePhoneEmailNotNull
+			fail = append(fail, suc1[k])
+			continue
+		}
+		suc2 = append(suc2, suc1[k])
+		m[suc1[k][consts.EMAIL].(string)] = m[suc1[k][consts.EMAIL].(string)] + 1
+		m[suc1[k][consts.PHONE].(string)] = m[suc1[k][consts.PHONE].(string)] + 1
+	}
+
+	//获取部门前缀树
+	depRouter := department.NewDepartmentRouter()
+	list, _ := u.depRepo.PageList(ctx, u.DB, consts.NormalStatus, 1, 10000)
+	depRouter.AddRoute(list)
+A:
+	for k := range suc2 {
+		if m[suc2[k][consts.EMAIL].(string)] <= 1 && m[suc2[k][consts.PHONE].(string)] <= 1 {
+			for k1 := range suc2[k] {
+				switch k1 {
+				case consts.EMAIL, consts.NAME, consts.SELFEMAIL:
+					if v1, ok := suc2[k][k1]; !ok || v1.(string) == "" {
+						suc2[k][consts.REMARK] = consts.NamePhoneEmailNotNull
+						fail = append(fail, suc2[k])
+						continue A
+					}
+					switch k1 {
+					case consts.EMAIL, consts.SELFEMAIL:
+						if !verification.CheckEmail(suc2[k][k1].(string)) {
+							suc2[k][consts.REMARK] = consts.NotEmail
+							fail = append(fail, suc2[k])
+							continue A
+						}
+					case consts.PHONE:
+						if !verification.CheckPhone(suc2[k][k1].(string)) {
+							suc2[k][consts.REMARK] = consts.NotPhone
+							fail = append(fail, suc2[k])
+							continue A
+						}
+					}
+				case consts.DEPNAME:
+					node := depRouter.GetRoute(suc2[k][k1].(string))
+					if node == nil {
+						suc2[k][consts.REMARK] = consts.NotDepartment
+						fail = append(fail, suc2[k])
+						continue A
+					}
+					suc2[k][consts.DEPID] = node.DepID
+				}
+			}
+			suc3 = append(suc3, suc2[k])
+			continue
+		}
+		suc2[k][consts.REMARK] = consts.EmailPhoneRepeat
+		fail = append(fail, suc2[k])
+	}
+	return suc3, fail
+}
+
+const (
+	isUpdate = 1
+)
+
+func (u *user) insertList(ctx context.Context, suc2 []map[string]interface{}, createBy string, r *ImportFileRequest) (suc, fails, updates []map[string]interface{}, userList []*org.User) {
+	var i = 0
+	fail := make([]map[string]interface{}, 0)
+	update := make([]map[string]interface{}, 0)
+	su := make([]map[string]interface{}, 0)
+	users := make([]*org.User, 0)
+	//获取过滤字段
+	//_, filters := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AllAttr)
+	for k := range suc2 {
+		res := u.userRepo.SelectByEmailOrPhone(ctx, u.DB, suc2[k][consts.EMAIL].(string))
+		if res != nil {
+			suc2[k][consts.ID] = res.ID
+			if r.IsUpdate == isUpdate {
+				suc2[k][consts.USESTATUS] = r.UseStatus
+				update = append(update, suc2[k])
+			} else {
+				suc2[k][consts.REMARK] = consts.EmailPhoneExist
+				fail = append(fail, suc2[k])
+			}
+			continue
+		}
+
+		tx := u.DB.Begin()
+		id := id2.HexUUID(true)
+		nowUnix := time2.NowUnix()
+		suc2[k][consts.ID] = id
+		suc2[k][consts.USESTATUS] = r.UseStatus
+
+		depID := suc2[k][consts.DEPID].(string)
+		//delete(suc2[k], consts.DEPNAME)
+		//delete(suc2[k], consts.DEPID)
+		u2 := &org.User{}
+		marshal, err := json.Marshal(suc2[k])
+		if err != nil {
+			fail = append(fail, suc2[k])
+			continue
+		}
+		err = json.Unmarshal(marshal, u2)
+		if err != nil {
+			fail = append(fail, suc2[k])
+			continue
+		}
+		u2.CreatedAt = nowUnix
+		u2.UpdatedAt = nowUnix
+		u2.CreatedBy = createBy
+		u2.UpdatedBy = createBy
+		err = u.userRepo.Insert(ctx, tx, u2)
+		//Filter(suc2, filters, IN)
+		if err != nil {
+			suc2[k][consts.REMARK] = consts.EmailPhoneExist
+			delete(suc2[k], consts.ID)
+			fail = append(fail, suc2[k])
+			tx.Rollback()
+			continue
+		}
+		password := CreatePassword(ctx, u.conf, u.redisClient)
+		account := org.Account{
+			ID:        id2.HexUUID(true),
+			Password:  encode2.MD5Encode(password),
+			Account:   u2.Email,
+			CreatedAt: nowUnix,
+			UpdatedAt: nowUnix,
+			CreatedBy: createBy,
+			UserID:    u2.ID,
+		}
+		err = u.accountReo.Insert(tx, &account)
+		if err != nil {
+			suc2[k][consts.REMARK] = consts.EmailPhoneExist
+			delete(suc2[k], consts.ID)
+			fail = append(fail, suc2[k])
+			tx.Rollback()
+			continue
+		}
+
+		err = u.updateUserDepRelation(tx, id, depID)
+		if err != nil {
+			suc2[k][consts.REMARK] = consts.RelationDepartmentFail
+			delete(suc2[k], consts.ID)
+			fail = append(fail, suc2[k])
+			tx.Rollback()
+			continue
+		}
+		su = append(su, suc2[k])
+		tx.Commit()
+		i = i + 1
+		users = append(users, u2)
+	}
+	return su, fail, update, users
+}
+
+func (u *user) updateList(ctx context.Context, list []map[string]interface{}, tenantID string) (updateSucs, fails []map[string]interface{}, userList []*org.User) {
+	fail := make([]map[string]interface{}, 0)
+	updateSuc := make([]map[string]interface{}, 0)
+	users := make([]*org.User, 0)
+	//获取过滤字段
+	//_, filters := u.columnRepo.GetFilter(ctx, u.DB, consts.FieldAdminStatus, consts.AllAttr)
+	for k := range list {
+		tx := u.DB.Begin()
+		depID := list[k][consts.DEPID].(string)
+		//delete(list[k], consts.DEPNAME)
+		delete(list[k], consts.DEPID)
+		u2 := &org.User{}
+		marshal, err := json.Marshal(list[k])
+		if err != nil {
+			fail = append(fail, list[k])
+			continue
+		}
+		err = json.Unmarshal(marshal, u2)
+		if err != nil {
+			fail = append(fail, list[k])
+			continue
+		}
+		err = u.userRepo.UpdateByID(ctx, tx, u2)
+		if err != nil {
+			fail = append(fail, list[k])
+			tx.Rollback()
+			return
+		}
+		//Filter(list[k], filters, IN)
+		id := list[k][consts.ID].(string)
+		err = u.updateUserDepRelation(tx, list[k][consts.ID].(string), depID)
+		if err != nil {
+			list[k][consts.REMARK] = consts.RelationDepartmentFail
+			delete(list[k], consts.ID)
+			fail = append(fail, list[k])
+			tx.Rollback()
+			continue
+		}
+		updateSuc = append(updateSuc, list[k])
+		tx.Commit()
+		us := u.userRepo.Get(ctx, u.DB, id)
+		users = append(users, us)
+	}
+	return updateSuc, fail, users
+}
+
+func (u *user) updateUserDepRelation(tx *gorm.DB, userID, depID string) error {
+	err := u.userDepRepo.DeleteByUserIDs(tx, userID)
+	if err != nil {
+		return err
+	}
+	relation := org.UserDepartmentRelation{
+		ID:     id2.ShortID(0),
+		UserID: userID,
+		DepID:  depID,
+	}
+	err = u.userDepRepo.Add(tx, &relation)
+	if err != nil {
+		return err
+	}
+	return nil
 }

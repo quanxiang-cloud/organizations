@@ -211,7 +211,7 @@ func (u *othersServer) PushDepToSearch(c context.Context, sig chan int) {
 	u.search.PushDep(c, sig)
 }
 
-//GetUserByIDsRequest get user by ids request
+// GetUserByIDsRequest get user by ids request
 type GetUserByIDsRequest struct {
 	IDs     []string `json:"ids"`
 	Profile header2.Profile
@@ -222,7 +222,7 @@ type GetUserByIDsResponse struct {
 	Users []user.ViewerSearchOneUserResponse `json:"users"`
 }
 
-//GetUserByIDs get user info by ids
+// GetUserByIDs get user info by ids
 func (u *othersServer) GetUserByIDs(c context.Context, rq *GetUserByIDsRequest) (*GetUserByIDsResponse, error) {
 	if len(rq.IDs) > 0 {
 		res := &GetUserByIDsResponse{}
@@ -266,7 +266,7 @@ const (
 func (u *othersServer) addUserOrUpdate(c context.Context, reqData []AddUser, isUpdate int, profile header2.Profile) (result map[int]*Result, err error) {
 	result = make(map[int]*Result)
 	info := systems.GetSecurityInfo(c, u.conf, u.redisClient)
-A:
+	//A:
 	for k := range reqData {
 		switch reqData[k].UseStatus {
 		case consts.NormalStatus:
@@ -402,14 +402,15 @@ A:
 
 			}
 		}
-		for k1 := range reqData[k].LeadersID {
-			err := user.CheckLeader(c, u.DB, u.userLeaderRepo, userID, reqData[k].LeadersID[k1])
-			if err != nil {
-				tx.Rollback()
-				result[k].Attr = fail
-				continue A
-			}
-		}
+		//for k1 := range reqData[k].LeadersID {
+		//	err := user.CheckLeader(c, u.DB, u.userLeaderRepo, userID, reqData[k].LeadersID[k1])
+		//	if err != nil {
+		//		logger.Logger.Error(err)
+		//		tx.Rollback()
+		//		result[k].Attr = fail
+		//		continue A
+		//	}
+		//}
 		err = u.dealUserDepartmentRelation(c, tx, userID, reqData[k].DepsID...)
 		if err != nil {
 			tx.Rollback()

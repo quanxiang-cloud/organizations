@@ -177,14 +177,30 @@ func (s *search) process(ctx context.Context) {
 			fmt.Println("done**")
 			return
 		case entity := <-s.user:
-			s.client.DelUser(entity.Ctx, entity.User)
-			s.client.AddUser(entity.Ctx, entity.User)
+			err := s.client.DelUser(entity.Ctx, entity.User)
+			if err != nil {
+				logger.Logger.Error(err)
+				continue
+			}
+			err = s.client.AddUser(entity.Ctx, entity.User)
+			if err != nil {
+				logger.Logger.Error(err)
+				continue
+			}
 			if entity.Sig != nil {
 				entity.Sig <- 1
 			}
 		case entity := <-s.dep:
-			s.client.DelDepartment(entity.Ctx)
-			s.client.AddDepartment(entity.Ctx, entity.Deps)
+			err := s.client.DelDepartment(entity.Ctx)
+			if err != nil {
+				logger.Logger.Error(err)
+				continue
+			}
+			err = s.client.AddDepartment(entity.Ctx, entity.Deps)
+			if err != nil {
+				logger.Logger.Error(err)
+				continue
+			}
 			if entity.Sig != nil {
 				entity.Sig <- 1
 			}

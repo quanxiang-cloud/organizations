@@ -194,6 +194,7 @@ func (u *account) AdminUpdatePassword(c context.Context, r *AdminUpdatePasswordR
 			response.Email = res.Email
 			response.Name = res.Name
 		}
+		u.redisClient.Del(c, redisAccountPWDErr+r.UserIDs[k])
 		u3.Users = append(u3.Users, response)
 	}
 
@@ -457,6 +458,7 @@ func (u *account) ForgetUpdatePassword(c context.Context, r *ForgetResetRequest)
 		UserID: oldUser.ID,
 	}
 	u.redisClient.Del(c, u.conf.VerificationCode.ForgetCode+":"+r.UserName)
+	u.redisClient.Del(c, redisAccountPWDErr+acc.UserID)
 	return &u3, nil
 
 }
